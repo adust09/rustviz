@@ -68,8 +68,11 @@ visual interpretation. This is why a new evaluation lens is a one-file frontend 
 
 - **Raw metrics in Rust, visuals in TS.** Keeps the analyzer reusable and the lens set
   cheap to extend.
-- **One AST pass, four lenses.** `visit.rs` collects every metric in a single walk
-  instead of re-traversing per lens.
+- **One AST pass, four metric families.** `visit.rs` collects every metric in a single
+  walk instead of re-traversing per metric. The frontend exposes three of them as heat
+  lenses (security, performance, complexity); architecture coupling (`fan_in`/`fan_out`,
+  `in_cycle`) instead drives the per-crate **structural base view** and cycle highlighting,
+  not a heat ramp.
 - **Natural call-resolution filter.** Only workspace-defined functions enter the name
   index, so external calls like `Vec::len()` never create spurious edges; same-name
   collisions prefer the caller's own crate.

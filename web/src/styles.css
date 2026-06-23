@@ -142,6 +142,20 @@ body,
   border-color: var(--accent);
   background: #18243f;
 }
+/* Structural base view — separated from the metric lenses by a thin divider. */
+.lens-btn.structure {
+  margin-right: 9px;
+  position: relative;
+}
+.lens-btn.structure::after {
+  content: "";
+  position: absolute;
+  right: -9px;
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: var(--border);
+}
 .lens-name {
   font-size: 13px;
   font-weight: 600;

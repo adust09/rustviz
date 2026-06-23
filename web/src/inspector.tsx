@@ -5,7 +5,8 @@ import type { Lens } from "./schema";
 
 interface InspectorProps {
   tile: Tile | null;
-  lens: Lens;
+  /** Active metric lens, or `null` for the structural base view. */
+  lens: Lens | null;
   crateDeps: Map<string, CrateDeps>;
   onClose: () => void;
 }
@@ -47,7 +48,12 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
   if (!tile) return null;
 
   const deps = crateDeps.get(tile.crate);
-  const topFns = [...tile.fns].sort((a, b) => b.scores[lens] - a.scores[lens]).slice(0, 8);
+  // Structure view ranks functions by size; a metric lens ranks by its score.
+  const sorted = lens
+    ? [...tile.fns].sort((a, b) => b.scores[lens] - a.scores[lens])
+    : [...tile.fns].sort((a, b) => b.loc - a.loc);
+  const topFns = sorted.slice(0, 8);
+  const maxFnLoc = Math.max(1, ...tile.fns.map((f) => f.loc));
 
   return (
     <div className="inspector">
@@ -98,18 +104,21 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
       )}
 
       <div className="topfns">
-        <div className="topfns-head">hottest functions · {lens}</div>
-        {topFns.map((f) => (
-          <div
-            key={f.id}
-            className={`topfn ${openFn?.id === f.id ? "open" : ""}`}
-            onClick={() => setOpenFn(openFn?.id === f.id ? null : f)}
-          >
-            <span className="topfn-bar" style={{ width: `${Math.max(4, f.scores[lens] * 100)}%` }} />
-            <span className="topfn-name">{f.name}</span>
-            <span className="topfn-score">{(f.scores[lens] * 100).toFixed(0)}%</span>
-          </div>
-        ))}
+        <div className="topfns-head">{lens ? `hottest functions · ${lens}` : "largest functions"}</div>
+        {topFns.map((f) => {
+          const ratio = lens ? f.scores[lens] : f.loc / maxFnLoc;
+          return (
+            <div
+              key={f.id}
+              className={`topfn ${openFn?.id === f.id ? "open" : ""}`}
+              onClick={() => setOpenFn(openFn?.id === f.id ? null : f)}
+            >
+              <span className="topfn-bar" style={{ width: `${Math.max(4, ratio * 100)}%` }} />
+              <span className="topfn-name">{f.name}</span>
+              <span className="topfn-score">{lens ? `${(f.scores[lens] * 100).toFixed(0)}%` : `${f.loc} LOC`}</span>
+            </div>
+          );
+        })}
       </div>
 
       {openFn && (

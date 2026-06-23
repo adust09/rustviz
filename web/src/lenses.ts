@@ -56,21 +56,9 @@ export function crateColor(crate: string, allCrates: readonly string[]): string 
 
 export const CYCLE_COLOR = "#ff2d55";
 
-/** Tile fill for a given lens and normalized 0..1 score. Architecture is categorical. */
-export function tileColor(
-  lens: Lens,
-  score: number,
-  crate: string,
-  allCrates: readonly string[],
-): string {
-  switch (lens) {
-    case "architecture":
-      return crateColor(crate, allCrates);
-    case "complexity":
-      return violet(score);
-    default:
-      return heat(score);
-  }
+/** Tile fill for a metric lens and its normalized 0..1 score. */
+export function tileColor(lens: Lens, score: number): string {
+  return lens === "complexity" ? violet(score) : heat(score);
 }
 
 // --- lens weight formulas (must match analyzer/src/metrics/*.rs) ---

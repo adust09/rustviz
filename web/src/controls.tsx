@@ -2,9 +2,9 @@ import type { Graph, Lens } from "./schema";
 
 interface ControlsProps {
   meta: Graph["meta"] | null;
-  lens: Lens;
+  lens: Lens | null;
   lenses: readonly Lens[];
-  onLens: (l: Lens) => void;
+  onLens: (l: Lens | null) => void;
   search: string;
   onSearch: (s: string) => void;
   onSearchSubmit: () => void;
@@ -13,7 +13,6 @@ interface ControlsProps {
 }
 
 const LENS_HINT: Record<Lens, string> = {
-  architecture: "crates · deps",
   security: "unsafe · unwrap · casts",
   performance: "alloc · clone · loops",
   complexity: "cyclomatic · LOC",
@@ -26,6 +25,16 @@ export function Controls(props: ControlsProps): JSX.Element {
     <div className="controls">
       <div className="controls-row">
         <div className="lens-group">
+          {/* Structural base view: per-crate coloring, not a metric. */}
+          <button
+            className={`lens-btn structure ${lens === null ? "active" : ""}`}
+            onClick={() => onLens(null)}
+            title="Color tiles by crate — the structural base view"
+          >
+            <span className="lens-name">structure</span>
+            <span className="lens-hint">crates · deps</span>
+          </button>
+
           {lenses.map((l) => (
             <button
               key={l}
@@ -60,7 +69,8 @@ export function Controls(props: ControlsProps): JSX.Element {
 
       {meta && (
         <div className="meta">
-          {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC · tile area = LOC · color = {lens}
+          {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC · tile area = LOC · color ={" "}
+          {lens ?? "crate"}
         </div>
       )}
     </div>

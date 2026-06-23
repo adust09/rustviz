@@ -1,9 +1,9 @@
 # RustViz — Rust Architecture Overview
 
 Analyze any Rust project and survey its **architecture at a glance** in the browser:
-a treemap of crates → modules where **tile area = lines of code** and **color = an
-evaluation lens** (Architecture, Security, Performance, Complexity). No function-node
-hairball — the structure is the picture.
+a treemap of crates → modules where **tile area = lines of code** and **color = crate**
+(the structural base view) **or one of three evaluation lenses** (Security, Performance,
+Complexity). No function-node hairball — the structure is the picture.
 
 ![RustViz architecture overview](docs/demo.gif)
 
@@ -16,18 +16,19 @@ rustviz /path/to/your/rust/project
 
 - **Crate → module treemap.** Each crate is an outlined region; the tiles inside are its
   top-level modules, sized by total LOC. The whole 20K-line codebase fits on one screen.
-- **Four lenses** recolor the same map, so you compare *the same structure* across axes:
+- **Structure** (the default view) colors each tile by its crate, so you read crate
+  composition at a glance; dependency-cycle modules are outlined in red.
+- **Three metric lenses** recolor the same map, so you compare *the same structure* across axes:
   | Lens | Color | Surfaces |
   |------|-------|----------|
-  | Architecture | per-crate hue | crate composition; dependency-cycle modules outlined in red |
   | Security | blue→red heat | unsafe, unwrap/expect, panic!, raw ptr, transmute, lossy casts |
   | Performance | blue→red heat | allocations, clone, nested loops, recursion, collect, await |
   | Complexity | teal→violet | cyclomatic complexity + size |
 - **Dependency overlay** (`⇄ deps`) draws crate-to-crate dependency arrows over the map;
   mutual (cyclic) dependencies are red.
 - **Inspector** — click a tile to see its aggregated metrics, which crates it depends on /
-  is used by, cycle membership, and the **hottest functions** in that module ranked by the
-  active lens. Click a function to read its actual source.
+  is used by, cycle membership, and its functions ranked by the active lens (or by size in
+  the structure view). Click a function to read its actual source.
 - **Search** — jump to any module by name.
 
 Metrics aggregate bottom-up: the analyzer emits raw per-function counts, the frontend sums

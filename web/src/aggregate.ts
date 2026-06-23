@@ -90,7 +90,7 @@ export function aggregate(graph: Graph): Aggregation {
         id, name, crate, loc: 0, fnCount: 0,
         security: zeroSecurity(), performance: zeroPerformance(),
         cyclomatic: 0, inCycle: false,
-        score: { architecture: 0, security: 0, performance: 0, complexity: 0 },
+        score: { security: 0, performance: 0, complexity: 0 },
         fns: [],
       };
       tiles.set(id, t);
@@ -116,7 +116,6 @@ export function aggregate(graph: Graph): Aggregation {
         id: n.id, name: n.name, file: n.file,
         start: n.span.start_line, end: n.span.end_line, loc: n.loc,
         scores: {
-          architecture: n.metrics.architecture.score,
           security: n.metrics.security.score,
           performance: n.metrics.performance.score,
           complexity: n.metrics.complexity.score,
@@ -134,7 +133,6 @@ export function aggregate(graph: Graph): Aggregation {
   const maxC = Math.max(1, ...cmpRaw);
   list.forEach((t, i) => {
     t.score = {
-      architecture: 0,
       security: secRaw[i] / maxS,
       performance: perfRaw[i] / maxP,
       complexity: cmpRaw[i] / maxC,
