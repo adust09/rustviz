@@ -554,3 +554,14 @@ body,
   font: 13px ui-monospace, Menlo, monospace;
   fill: #6b7891;
 }
+
+/* Iso sequence: tilt the flat temporal plane back into 3D for depth. */
+.iso-tilt {
+  position: absolute;
+  inset: 0;
+  perspective: 1400px;
+}
+.iso-tilt .diag-scroll {
+  transform: rotateX(34deg) scale(0.92);
+  transform-origin: top center;
+}

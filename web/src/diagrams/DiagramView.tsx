@@ -4,6 +4,7 @@ import type { Graph } from "../schema";
 import { buildStructureScene } from "./structureScene";
 import { buildSequenceScene } from "./sequenceScene";
 import { LayeredRenderer } from "./LayeredRenderer";
+import { IsometricRenderer } from "./IsometricRenderer";
 import type { DiagramScene, RenderStyle } from "./types";
 
 interface DiagramViewProps {
@@ -45,15 +46,13 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
 
   return (
     <div className="diagram-wrap">
-      {renderStyle === "flat" ? (
-        <LayeredRenderer
-          scene={scene}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onOpenSource={onOpenSource}
-          onDrillToSequence={onDrillToSequence}
-        />
-      ) : (
+      {renderStyle === "flat" && (
+        <LayeredRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
+      )}
+      {renderStyle === "iso" && (
+        <IsometricRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
+      )}
+      {renderStyle === "3d" && (
         <Placeholder scene={scene} renderStyle={renderStyle} onSelect={setSelectedId} selectedId={selectedId} onDrillToSequence={onDrillToSequence} onOpenSource={onOpenSource} />
       )}
       {open && (
