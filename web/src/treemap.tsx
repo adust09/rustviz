@@ -14,7 +14,8 @@ interface HNode {
 
 interface TreemapProps {
   agg: Aggregation;
-  lens: Lens;
+  /** A metric lens (heat fill), or `null` for the structural base (per-crate fill). */
+  lens: Lens | null;
   selectedId: string | null;
   onSelect: (tile: Tile) => void;
   showDeps: boolean;
@@ -107,7 +108,7 @@ export function Treemap({ agg, lens, selectedId, onSelect, showDeps }: TreemapPr
           const tile = n.data.tile!;
           const w = n.x1 - n.x0;
           const h = n.y1 - n.y0;
-          const fill = tileColor(lens, tile.score[lens], tile.crate, agg.crates);
+          const fill = lens ? tileColor(lens, tile.score[lens]) : crateColor(tile.crate, agg.crates);
           const selected = selectedId === tile.id;
           const showLabel = w > 46 && h > 18;
           return (

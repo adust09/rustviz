@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchSource } from "./api";
 import type { CrateDeps, Tile, TileFn } from "./aggregate";
 import type { Lens } from "./schema";
 
 interface InspectorProps {
   tile: Tile | null;
-  lens: Lens;
+  /** Active metric lens, or `null` for the structural base view. */
+  lens: Lens | null;
   crateDeps: Map<string, CrateDeps>;
   onClose: () => void;
 }
@@ -27,11 +28,36 @@ function rawDetail(tile: Tile, lens: Lens): string {
 export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): JSX.Element | null {
   const [openFn, setOpenFn] = useState<TileFn | null>(null);
   const [source, setSource] = useState<string>("");
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Dragged position; `null` keeps the default top-right anchor (see styles.css).
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     setOpenFn(null);
     setSource("");
   }, [tile]);
+
+  // Drag the panel by its header so it can be moved off the tiles it covers.
+  const onDragStart = (e: React.MouseEvent): void => {
+    if (!panelRef.current || e.button !== 0) return;
+    e.preventDefault();
+    const rect = panelRef.current.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMove = (me: MouseEvent): void => {
+      const maxX = Math.max(0, window.innerWidth - rect.width);
+      const maxY = Math.max(0, window.innerHeight - rect.height);
+      const nx = rect.left + (me.clientX - startX);
+      const ny = rect.top + (me.clientY - startY);
+      setPos({ x: Math.min(Math.max(0, nx), maxX), y: Math.min(Math.max(0, ny), maxY) });
+    };
+    const onUp = (): void => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   useEffect(() => {
     if (!openFn) return;
@@ -47,16 +73,21 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
   if (!tile) return null;
 
   const deps = crateDeps.get(tile.crate);
-  const topFns = [...tile.fns].sort((a, b) => b.scores[lens] - a.scores[lens]).slice(0, 8);
+  // Structure view ranks functions by size; a metric lens ranks by its score.
+  const sorted = lens
+    ? [...tile.fns].sort((a, b) => b.scores[lens] - a.scores[lens])
+    : [...tile.fns].sort((a, b) => b.loc - a.loc);
+  const topFns = sorted.slice(0, 8);
+  const maxFnLoc = Math.max(1, ...tile.fns.map((f) => f.loc));
 
   return (
-    <div className="inspector">
-      <div className="inspector-head">
+    <div className="inspector" ref={panelRef} style={pos ? { left: pos.x, top: pos.y, right: "auto" } : undefined}>
+      <div className="inspector-head" onMouseDown={onDragStart}>
         <div>
           <div className="inspector-name">{tile.name}</div>
           <div className="inspector-id">{tile.crate}</div>
         </div>
-        <button className="close" onClick={onClose}>
+        <button className="close" onMouseDown={(e) => e.stopPropagation()} onClick={onClose}>
           ✕
         </button>
       </div>
@@ -98,18 +129,21 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
       )}
 
       <div className="topfns">
-        <div className="topfns-head">hottest functions · {lens}</div>
-        {topFns.map((f) => (
-          <div
-            key={f.id}
-            className={`topfn ${openFn?.id === f.id ? "open" : ""}`}
-            onClick={() => setOpenFn(openFn?.id === f.id ? null : f)}
-          >
-            <span className="topfn-bar" style={{ width: `${Math.max(4, f.scores[lens] * 100)}%` }} />
-            <span className="topfn-name">{f.name}</span>
-            <span className="topfn-score">{(f.scores[lens] * 100).toFixed(0)}%</span>
-          </div>
-        ))}
+        <div className="topfns-head">{lens ? `hottest functions · ${lens}` : "largest functions"}</div>
+        {topFns.map((f) => {
+          const ratio = lens ? f.scores[lens] : f.loc / maxFnLoc;
+          return (
+            <div
+              key={f.id}
+              className={`topfn ${openFn?.id === f.id ? "open" : ""}`}
+              onClick={() => setOpenFn(openFn?.id === f.id ? null : f)}
+            >
+              <span className="topfn-bar" style={{ width: `${Math.max(4, ratio * 100)}%` }} />
+              <span className="topfn-name">{f.name}</span>
+              <span className="topfn-score">{lens ? `${(f.scores[lens] * 100).toFixed(0)}%` : `${f.loc} LOC`}</span>
+            </div>
+          );
+        })}
       </div>
 
       {openFn && (

@@ -11,7 +11,8 @@ const EMPTY_DEPS = new Map();
 export function App(): JSX.Element {
   const [graph, setGraph] = useState<Graph | null>(null);
   const [error, setError] = useState<string>("");
-  const [lens, setLens] = useState<Lens>("architecture");
+  // `null` = structural base view (per-crate coloring); a Lens = metric heatmap.
+  const [lens, setLens] = useState<Lens | null>(null);
   const [selected, setSelected] = useState<Tile | null>(null);
   const [search, setSearch] = useState<string>("");
   const [showDeps, setShowDeps] = useState<boolean>(false);
