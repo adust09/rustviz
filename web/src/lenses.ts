@@ -7,21 +7,9 @@ function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t));
 }
 
-function hexToRgb(h: string): [number, number, number] {
-  const s = h.replace("#", "");
-  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
-}
-
 function rgbToHex(r: number, g: number, b: number): string {
   const f = (x: number): string => Math.round(x).toString(16).padStart(2, "0");
   return `#${f(r)}${f(g)}${f(b)}`;
-}
-
-function lerpHex(a: string, b: string, t: number): string {
-  const [ar, ag, ab] = hexToRgb(a);
-  const [br, bg, bb] = hexToRgb(b);
-  const u = clamp01(t);
-  return rgbToHex(ar + (br - ar) * u, ag + (bg - ag) * u, ab + (bb - ab) * u);
 }
 
 function hslToHex(h: number, s: number, l: number): string {
@@ -38,16 +26,6 @@ function hslToHex(h: number, s: number, l: number): string {
   return rgbToHex((rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255);
 }
 
-/** Cool -> hot heat ramp (blue -> yellow -> red). */
-export function heat(t: number): string {
-  return t < 0.5 ? lerpHex("#243b6b", "#ffd23f", t * 2) : lerpHex("#ffd23f", "#ff3b30", (t - 0.5) * 2);
-}
-
-/** Low -> high complexity ramp (teal -> violet). */
-export function violet(t: number): string {
-  return lerpHex("#15695d", "#b14bff", t);
-}
-
 /** Stable per-crate hue (golden-angle spacing). */
 export function crateColor(crate: string, allCrates: readonly string[]): string {
   const idx = Math.max(0, allCrates.indexOf(crate));
@@ -56,9 +34,40 @@ export function crateColor(crate: string, allCrates: readonly string[]): string 
 
 export const CYCLE_COLOR = "#ff2d55";
 
-/** Tile fill for a metric lens and its normalized 0..1 score. */
-export function tileColor(lens: Lens, score: number): string {
-  return lens === "complexity" ? violet(score) : heat(score);
+// --- comprehensive multi-lens coloring (heatmap) ---
+//
+// Checking any subset of the metric lenses layers them over the structural base.
+// The active lenses' scores are averaged (see `meanScore`) into one 0..1 value
+// and mapped onto a single cool -> hot ramp, so the map reads on one axis.
+
+function hexToRgb(h: string): [number, number, number] {
+  const s = h.replace("#", "");
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
+}
+
+function lerpHex(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  const u = clamp01(t);
+  return rgbToHex(ar + (br - ar) * u, ag + (bg - ag) * u, ab + (bb - ab) * u);
+}
+
+// Cool -> hot stops, exported so the legend gradient can reuse them.
+export const HEAT_LOW = "#243b6b";
+export const HEAT_MID = "#ffd23f";
+export const HEAT_HIGH = "#ff3b30";
+
+/** Cool -> hot heat ramp (blue -> yellow -> red) for a normalized 0..1 score. */
+export function heat(t: number): string {
+  return t < 0.5 ? lerpHex(HEAT_LOW, HEAT_MID, t * 2) : lerpHex(HEAT_MID, HEAT_HIGH, (t - 0.5) * 2);
+}
+
+/** Mean of the active metrics' scores (0 when none active) — drives heat + ranking. */
+export function meanScore(active: ReadonlySet<Lens>, score: Record<Lens, number>): number {
+  if (active.size === 0) return 0;
+  let sum = 0;
+  for (const l of active) sum += score[l];
+  return sum / active.size;
 }
 
 // --- lens weight formulas (must match analyzer/src/metrics/*.rs) ---
@@ -87,5 +96,5 @@ export function performanceRaw(m: Metrics["performance"]): number {
 }
 
 export function complexityRaw(m: Metrics["complexity"]): number {
-  return m.cyclomatic * 1 + m.max_nesting * 1.5 + m.loc * 0.05;
+  return m.cyclomatic * 1 + m.max_nesting * 1.5;
 }

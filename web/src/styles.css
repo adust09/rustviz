@@ -122,11 +122,16 @@ body,
   gap: 6px;
   flex: 1;
 }
-.lens-btn {
+.lens-name {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+/* Metric lenses as checkboxes — check any subset; scores average into one heat. */
+.lens-check {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
+  align-items: center;
+  gap: 8px;
   background: #161b24;
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -135,31 +140,24 @@ body,
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
-.lens-btn:hover {
+.lens-check:hover {
   border-color: #34405a;
 }
-.lens-btn.active {
+.lens-check.active {
   border-color: var(--accent);
   background: #18243f;
 }
-/* Structural base view — separated from the metric lenses by a thin divider. */
-.lens-btn.structure {
-  margin-right: 9px;
-  position: relative;
+.lens-check input {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  cursor: pointer;
 }
-.lens-btn.structure::after {
-  content: "";
-  position: absolute;
-  right: -9px;
-  top: 5px;
-  bottom: 5px;
-  width: 1px;
-  background: var(--border);
-}
-.lens-name {
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: capitalize;
+.lens-check-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
 }
 .lens-hint {
   font-size: 10px;
@@ -194,11 +192,29 @@ body,
   border-color: var(--accent);
 }
 
-.meta {
+.controls-foot {
   margin-top: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.meta {
   font-size: 11px;
   color: var(--muted);
   text-align: center;
+}
+.heat-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.heat-bar {
+  width: 90px;
+  height: 7px;
+  border-radius: 4px;
 }
 
 /* Inspector */

@@ -11,11 +11,20 @@ const EMPTY_DEPS = new Map();
 export function App(): JSX.Element {
   const [graph, setGraph] = useState<Graph | null>(null);
   const [error, setError] = useState<string>("");
-  // `null` = structural base view (per-crate coloring); a Lens = metric heatmap.
-  const [lens, setLens] = useState<Lens | null>(null);
+  // Empty set = structural base (per-crate coloring). Toggling any subset of the
+  // metric lenses layers them as an RGB channel mix over that base.
+  const [active, setActive] = useState<ReadonlySet<Lens>>(() => new Set());
   const [selected, setSelected] = useState<Tile | null>(null);
   const [search, setSearch] = useState<string>("");
   const [showDeps, setShowDeps] = useState<boolean>(false);
+
+  const toggleLens = (l: Lens): void =>
+    setActive((prev) => {
+      const next = new Set(prev);
+      if (next.has(l)) next.delete(l);
+      else next.add(l);
+      return next;
+    });
 
   useEffect(() => {
     fetchGraph()
@@ -49,7 +58,7 @@ export function App(): JSX.Element {
       {agg && (
         <Treemap
           agg={agg}
-          lens={lens}
+          active={active}
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
           showDeps={showDeps}
@@ -58,9 +67,9 @@ export function App(): JSX.Element {
 
       <Controls
         meta={graph?.meta ?? null}
-        lens={lens}
+        active={active}
         lenses={LENSES}
-        onLens={setLens}
+        onToggleLens={toggleLens}
         search={search}
         onSearch={setSearch}
         onSearchSubmit={onSearchSubmit}
@@ -70,7 +79,7 @@ export function App(): JSX.Element {
 
       <Inspector
         tile={selected}
-        lens={lens}
+        active={active}
         crateDeps={agg?.crateDeps ?? EMPTY_DEPS}
         onClose={() => setSelected(null)}
       />
