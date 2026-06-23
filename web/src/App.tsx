@@ -25,7 +25,6 @@ export function App(): JSX.Element {
       else next.add(l);
       return next;
     });
-  const clearLenses = (): void => setActive(new Set());
 
   useEffect(() => {
     fetchGraph()
@@ -71,7 +70,6 @@ export function App(): JSX.Element {
         active={active}
         lenses={LENSES}
         onToggleLens={toggleLens}
-        onClearLenses={clearLenses}
         search={search}
         onSearch={setSearch}
         onSearchSubmit={onSearchSubmit}

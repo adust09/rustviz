@@ -6,7 +6,6 @@ interface ControlsProps {
   active: ReadonlySet<Lens>;
   lenses: readonly Lens[];
   onToggleLens: (l: Lens) => void;
-  onClearLenses: () => void;
   search: string;
   onSearch: (s: string) => void;
   onSearchSubmit: () => void;
@@ -23,8 +22,7 @@ const LENS_HINT: Record<Lens, string> = {
 const HEAT_GRADIENT = `linear-gradient(90deg, ${HEAT_LOW}, ${HEAT_MID}, ${HEAT_HIGH})`;
 
 export function Controls(props: ControlsProps): JSX.Element {
-  const { meta, active, lenses, onToggleLens, onClearLenses, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } =
-    props;
+  const { meta, active, lenses, onToggleLens, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } = props;
 
   const hasLens = active.size > 0;
   const colorLabel = hasLens ? [...lenses].filter((l) => active.has(l)).join(" + ") : "crate";
@@ -33,17 +31,8 @@ export function Controls(props: ControlsProps): JSX.Element {
     <div className="controls">
       <div className="controls-row">
         <div className="lens-group">
-          {/* Structural base view: per-crate coloring. Clears every metric layer. */}
-          <button
-            className={`lens-btn structure ${active.size === 0 ? "active" : ""}`}
-            onClick={onClearLenses}
-            title="Color tiles by crate — the structural base view"
-          >
-            <span className="lens-name">structure</span>
-            <span className="lens-hint">crates · deps</span>
-          </button>
-
-          {/* Metric lenses: check any subset; scores average into one heat value. */}
+          {/* No lens checked = structural base (per-crate coloring). Checking any
+              subset overlays the heatmap; the meta line reflects the active color. */}
           {lenses.map((l) => (
             <label
               key={l}

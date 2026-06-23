@@ -122,40 +122,6 @@ body,
   gap: 6px;
   flex: 1;
 }
-.lens-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  background: #161b24;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 6px 11px;
-  color: var(--text);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.lens-btn:hover {
-  border-color: #34405a;
-}
-.lens-btn.active {
-  border-color: var(--accent);
-  background: #18243f;
-}
-/* Structural base view — separated from the metric lenses by a thin divider. */
-.lens-btn.structure {
-  margin-right: 9px;
-  position: relative;
-}
-.lens-btn.structure::after {
-  content: "";
-  position: absolute;
-  right: -9px;
-  top: 5px;
-  bottom: 5px;
-  width: 1px;
-  background: var(--border);
-}
 .lens-name {
   font-size: 13px;
   font-weight: 600;
