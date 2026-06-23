@@ -127,7 +127,7 @@ export function aggregate(graph: Graph): Aggregation {
   const list = [...tiles.values()].filter((t) => t.loc > 0);
   const secRaw = list.map((t) => securityRaw(t.security));
   const perfRaw = list.map((t) => performanceRaw(t.performance));
-  const cmpRaw = list.map((t) => t.cyclomatic + t.loc * 0.05);
+  const cmpRaw = list.map((t) => t.cyclomatic);
   const maxS = Math.max(1, ...secRaw);
   const maxP = Math.max(1, ...perfRaw);
   const maxC = Math.max(1, ...cmpRaw);

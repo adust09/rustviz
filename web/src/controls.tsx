@@ -15,7 +15,7 @@ interface ControlsProps {
 const LENS_HINT: Record<Lens, string> = {
   security: "unsafe · unwrap · casts",
   performance: "alloc · clone · loops",
-  complexity: "cyclomatic · LOC",
+  complexity: "cyclomatic · nesting",
 };
 
 export function Controls(props: ControlsProps): JSX.Element {

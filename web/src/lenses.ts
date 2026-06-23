@@ -87,5 +87,5 @@ export function performanceRaw(m: Metrics["performance"]): number {
 }
 
 export function complexityRaw(m: Metrics["complexity"]): number {
-  return m.cyclomatic * 1 + m.max_nesting * 1.5 + m.loc * 0.05;
+  return m.cyclomatic * 1 + m.max_nesting * 1.5;
 }
