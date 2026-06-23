@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchSource } from "./api";
 import type { CrateDeps, Tile, TileFn } from "./aggregate";
 import type { Lens } from "./schema";
@@ -28,11 +28,36 @@ function rawDetail(tile: Tile, lens: Lens): string {
 export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): JSX.Element | null {
   const [openFn, setOpenFn] = useState<TileFn | null>(null);
   const [source, setSource] = useState<string>("");
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Dragged position; `null` keeps the default top-right anchor (see styles.css).
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     setOpenFn(null);
     setSource("");
   }, [tile]);
+
+  // Drag the panel by its header so it can be moved off the tiles it covers.
+  const onDragStart = (e: React.MouseEvent): void => {
+    if (!panelRef.current || e.button !== 0) return;
+    e.preventDefault();
+    const rect = panelRef.current.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const onMove = (me: MouseEvent): void => {
+      const maxX = Math.max(0, window.innerWidth - rect.width);
+      const maxY = Math.max(0, window.innerHeight - rect.height);
+      const nx = rect.left + (me.clientX - startX);
+      const ny = rect.top + (me.clientY - startY);
+      setPos({ x: Math.min(Math.max(0, nx), maxX), y: Math.min(Math.max(0, ny), maxY) });
+    };
+    const onUp = (): void => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
 
   useEffect(() => {
     if (!openFn) return;
@@ -56,13 +81,13 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
   const maxFnLoc = Math.max(1, ...tile.fns.map((f) => f.loc));
 
   return (
-    <div className="inspector">
-      <div className="inspector-head">
+    <div className="inspector" ref={panelRef} style={pos ? { left: pos.x, top: pos.y, right: "auto" } : undefined}>
+      <div className="inspector-head" onMouseDown={onDragStart}>
         <div>
           <div className="inspector-name">{tile.name}</div>
           <div className="inspector-id">{tile.crate}</div>
         </div>
-        <button className="close" onClick={onClose}>
+        <button className="close" onMouseDown={(e) => e.stopPropagation()} onClick={onClose}>
           ✕
         </button>
       </div>

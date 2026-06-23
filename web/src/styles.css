@@ -222,6 +222,8 @@ body,
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
+  cursor: move;
+  user-select: none;
 }
 .inspector-name {
   font-size: 16px;
