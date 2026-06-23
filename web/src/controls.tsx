@@ -5,50 +5,22 @@ interface ControlsProps {
   lens: Lens;
   lenses: readonly Lens[];
   onLens: (l: Lens) => void;
-  entrypoints: string[];
-  entrypoint: string;
-  onEntrypoint: (s: string) => void;
-  playing: boolean;
-  stepIdx: number;
-  stepCount: number;
-  onPlay: () => void;
-  onPause: () => void;
-  onReset: () => void;
-  onScrub: (i: number) => void;
   search: string;
   onSearch: (s: string) => void;
   onSearchSubmit: () => void;
+  showDeps: boolean;
+  onToggleDeps: () => void;
 }
 
 const LENS_HINT: Record<Lens, string> = {
-  architecture: "modules · deps · cycles",
+  architecture: "crates · deps",
   security: "unsafe · unwrap · casts",
   performance: "alloc · clone · loops",
-  complexity: "cyclomatic · nesting",
+  complexity: "cyclomatic · LOC",
 };
 
 export function Controls(props: ControlsProps): JSX.Element {
-  const {
-    meta,
-    lens,
-    lenses,
-    onLens,
-    entrypoints,
-    entrypoint,
-    onEntrypoint,
-    playing,
-    stepIdx,
-    stepCount,
-    onPlay,
-    onPause,
-    onReset,
-    onScrub,
-    search,
-    onSearch,
-    onSearchSubmit,
-  } = props;
-
-  const analyzed = meta ? new Date(Number(meta.analyzed_at)).toLocaleTimeString() : "";
+  const { meta, lens, lenses, onLens, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } = props;
 
   return (
     <div className="controls">
@@ -67,6 +39,14 @@ export function Controls(props: ControlsProps): JSX.Element {
           ))}
         </div>
 
+        <button
+          className={`deps-toggle ${showDeps ? "active" : ""}`}
+          onClick={onToggleDeps}
+          title="Overlay crate dependency arrows"
+        >
+          ⇄ deps
+        </button>
+
         <form
           className="search"
           onSubmit={(e) => {
@@ -74,52 +54,13 @@ export function Controls(props: ControlsProps): JSX.Element {
             onSearchSubmit();
           }}
         >
-          <input
-            placeholder="find symbol…"
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-          />
+          <input placeholder="find module…" value={search} onChange={(e) => onSearch(e.target.value)} />
         </form>
-      </div>
-
-      <div className="controls-row transport">
-        <span className="sim-label">static call-flow</span>
-        <select value={entrypoint} onChange={(e) => onEntrypoint(e.target.value)}>
-          {entrypoints.map((ep) => (
-            <option key={ep} value={ep}>
-              {ep}
-            </option>
-          ))}
-        </select>
-        {playing ? (
-          <button className="transport-btn" onClick={onPause}>
-            ⏸
-          </button>
-        ) : (
-          <button className="transport-btn" onClick={onPlay}>
-            ▶
-          </button>
-        )}
-        <button className="transport-btn" onClick={onReset}>
-          ⟲
-        </button>
-        <input
-          className="scrubber"
-          type="range"
-          min={0}
-          max={Math.max(0, stepCount - 1)}
-          value={stepIdx}
-          onChange={(e) => onScrub(Number(e.target.value))}
-        />
-        <span className="step-count">
-          {stepCount > 0 ? `${stepIdx + 1}/${stepCount}` : "0/0"}
-        </span>
       </div>
 
       {meta && (
         <div className="meta">
-          {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC ·
-          analyzed {analyzed}
+          {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC · tile area = LOC · color = {lens}
         </div>
       )}
     </div>

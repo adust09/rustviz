@@ -21,7 +21,7 @@ rustviz <path>
         ↓ serde_json
   [2] server  (Rust bin)    axum: /api/analyze, /api/source, embedded web/dist
         ↓ HTTP (127.0.0.1:7878)
-  [3] web     (TS/Vite)     3d-force-graph (Three.js): lens mapping, particles, simulation
+  [3] web     (TS/Vite)     aggregate to crate/module treemap (d3-hierarchy), lens recolor
 ```
 
 ### [1] analyzer (`analyzer/`)
@@ -53,10 +53,10 @@ A thin `axum` binary:
 | File | Responsibility |
 |------|----------------|
 | `schema.ts` | Zod validation of the JSON at the network boundary |
-| `graph3d.ts` | Imperative wrapper over `3d-force-graph`: lens coloring, animated lens transitions, ambient particle flow, simulation highlight + `emitParticle` call pulses |
-| `lenses.ts` | **Pure** `metric → {color, size}` mapping — the only file to touch when adding a lens |
-| `simulation.ts` | DFS over the `calls` graph from an entry point → ordered step list with virtual call-stack snapshots |
-| `inspector.tsx`, `controls.tsx`, `App.tsx` | React overlay UI on top of the WebGL canvas |
+| `aggregate.ts` | Roll functions up to a crate → top-level-module treemap: sum LOC + raw metric counts per tile, normalize scores across tiles, collect crate dependencies |
+| `lenses.ts` | **Pure** color helpers + the lens weight formulas (ported from `metrics/*.rs`) — the only file to touch when adding a lens |
+| `treemap.tsx` | `d3-hierarchy` treemap layout rendered as SVG: crate regions, module tiles colored by lens, dependency-arrow overlay, click/hover |
+| `inspector.tsx`, `controls.tsx`, `App.tsx` | React UI: tile inspector (aggregated metrics, deps, hottest functions), lens switcher, search |
 
 ## The JSON contract
 

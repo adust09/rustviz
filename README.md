@@ -1,11 +1,11 @@
-# RustViz — 3D Rust Project Simulator
+# RustViz — Rust Architecture Overview
 
-Analyze any Rust project and explore it as a **3D, motion-driven simulator** in your
-browser — not a static architecture diagram. Switch between four evaluation lenses
-(Architecture, Security, Performance, Complexity) and watch control flow propagate
-through the call graph.
+Analyze any Rust project and survey its **architecture at a glance** in the browser:
+a treemap of crates → modules where **tile area = lines of code** and **color = an
+evaluation lens** (Architecture, Security, Performance, Complexity). No function-node
+hairball — the structure is the picture.
 
-![RustViz demo](docs/demo.gif)
+![RustViz architecture overview](docs/demo.gif)
 
 ```bash
 rustviz /path/to/your/rust/project
@@ -14,49 +14,49 @@ rustviz /path/to/your/rust/project
 
 ## What it shows
 
-- **3D force-directed graph** of crates → modules → types/traits → functions, with
-  call edges (blue), crate dependencies (orange), containment, and trait impls.
-- **Ambient motion** — particles continuously flow along call/dependency edges so the
-  graph always feels alive, not frozen.
-- **Four lenses** that re-color and re-size every node by a different metric:
-  | Lens | Color | Size | Highlights |
-  |------|-------|------|------------|
-  | Architecture | per-crate hue | fan-in | **dependency cycles in red** |
-  | Security | blue→red heat | unsafe + unwrap | `unsafe`, `unwrap/expect`, `panic!`, raw ptr, `transmute`, lossy casts |
-  | Performance | blue→red heat | allocs + clones | allocations, `.clone()`, nested loops, recursion, `.collect()`, `.await` |
-  | Complexity | teal→violet | cyclomatic | cyclomatic complexity, nesting depth, LOC |
-- **Execution simulation** — pick an entry point (`main`, etc.), press ▶, and a
-  depth-first walk of the call graph lights up functions in order while a virtual
-  **call stack** grows and shrinks on the left. Scrub the timeline freely.
-- **Inspector** — click or search a symbol to focus the camera, see all four metric
-  scores as bars, and read the actual source lines (served on demand).
+- **Crate → module treemap.** Each crate is an outlined region; the tiles inside are its
+  top-level modules, sized by total LOC. The whole 20K-line codebase fits on one screen.
+- **Four lenses** recolor the same map, so you compare *the same structure* across axes:
+  | Lens | Color | Surfaces |
+  |------|-------|----------|
+  | Architecture | per-crate hue | crate composition; dependency-cycle modules outlined in red |
+  | Security | blue→red heat | unsafe, unwrap/expect, panic!, raw ptr, transmute, lossy casts |
+  | Performance | blue→red heat | allocations, clone, nested loops, recursion, collect, await |
+  | Complexity | teal→violet | cyclomatic complexity + size |
+- **Dependency overlay** (`⇄ deps`) draws crate-to-crate dependency arrows over the map;
+  mutual (cyclic) dependencies are red.
+- **Inspector** — click a tile to see its aggregated metrics, which crates it depends on /
+  is used by, cycle membership, and the **hottest functions** in that module ranked by the
+  active lens. Click a function to read its actual source.
+- **Search** — jump to any module by name.
+
+Metrics aggregate bottom-up: the analyzer emits raw per-function counts, the frontend sums
+them per module and normalizes across tiles. Switching lenses is an animated recolor.
 
 ## How it works
 
-Three loosely-coupled layers (see [docs/architecture.md](docs/architecture.md)):
+Three loosely-coupled layers joined by one JSON contract (see
+[docs/architecture.md](docs/architecture.md)):
 
 ```
 rustviz <path>
-  [1] analyzer (Rust)  cargo_metadata + syn AST walk → graph with raw metrics
+  [1] analyzer (Rust)  cargo_metadata + syn AST walk → graph with per-fn raw metrics
         ↓ JSON
   [2] server  (Rust)   axum: /api/analyze, /api/source, embedded web assets
         ↓ HTTP (127.0.0.1)
-  [3] web     (TS)     3d-force-graph (Three.js): lens mapping, particles, simulation
+  [3] web     (TS)     aggregate to crate/module treemap (d3-hierarchy), lens recolor
 ```
 
-The analyzer emits **only raw metric counts** plus a normalized 0..1 `score` per lens.
-All "metric → color/size" mapping lives in the frontend (`web/src/lenses.ts`), so
-adding a new evaluation lens is a one-file change.
+The analyzer emits only raw metric counts plus a normalized score; all aggregation and
+visual mapping live in the frontend, so adding a new lens is a one-file change
+(`web/src/lenses.ts`).
 
 ## Install & run
 
 Prerequisites: a Rust toolchain (1.75+) and Node 18+ (only to build the frontend).
 
 ```bash
-# 1. build the frontend bundle (embedded into the server binary)
-cd web && npm install && npm run build && cd ..
-
-# 2. run against any Rust project
+cd web && npm install && npm run build && cd ..    # build the embedded UI bundle
 cargo run --release -p rustviz-server -- /path/to/project
 ```
 
@@ -71,28 +71,19 @@ rustviz <path> --dump          # print the analysis JSON to stdout and exit
 ## Development
 
 ```bash
-# terminal 1 — backend (API on :7878)
-cargo run -p rustviz-server -- /path/to/project --no-open
-
-# terminal 2 — Vite dev server with HMR (proxies /api to :7878)
-cd web && npm run dev          # http://localhost:5173
-```
-
-Run the analyzer tests:
-
-```bash
-cargo test -p rustviz-analyzer
+cargo run -p rustviz-server -- /path/to/project --no-open   # backend API on :7878
+cd web && npm run dev                                       # Vite + HMR on :5173
+cargo test -p rustviz-analyzer                              # analyzer tests
 ```
 
 ## Limitations
 
-- The call graph is a **name-based syntactic approximation** (`syn` is a parser, not a
-  name resolver). Calls to functions defined in the workspace resolve cleanly; same-name
-  collisions are disambiguated by preferring the same crate. The execution simulation is
-  therefore a *static call-flow*, not a real runtime trace.
-- Code generated by macro expansion is not analyzed (the pre-expansion source is).
+- Dependency cycles and crate edges come from a name-based syntactic analysis (`syn` is a
+  parser, not a name resolver). Calls to functions defined in the workspace resolve cleanly;
+  external calls never create spurious edges.
+- Macro-expanded code is not analyzed (the pre-expansion source is).
 
 ## Tech stack
 
 `syn` · `cargo_metadata` · `petgraph` · `axum` · `rust-embed` (Rust) ·
-`3d-force-graph` / `three` · `react` · `zod` · `vite` (TypeScript)
+`d3-hierarchy` · `react` · `zod` · `vite` (TypeScript)

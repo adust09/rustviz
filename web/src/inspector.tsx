@@ -1,79 +1,60 @@
 import { useEffect, useState } from "react";
 import { fetchSource } from "./api";
-import type { GraphNode, Lens } from "./schema";
+import type { CrateDeps, Tile, TileFn } from "./aggregate";
+import type { Lens } from "./schema";
 
 interface InspectorProps {
-  node: GraphNode | null;
+  tile: Tile | null;
   lens: Lens;
+  crateDeps: Map<string, CrateDeps>;
   onClose: () => void;
 }
 
-interface Bar {
-  label: string;
-  score: number;
-  detail: string;
+const METRIC_LENSES: Lens[] = ["security", "performance", "complexity"];
+
+function rawDetail(tile: Tile, lens: Lens): string {
+  if (lens === "security") {
+    const s = tile.security;
+    return `unsafe ${s.unsafe_blocks} · unwrap ${s.unwraps} · expect ${s.expects} · panic ${s.panics} · cast ${s.lossy_casts}`;
+  }
+  if (lens === "performance") {
+    const p = tile.performance;
+    return `alloc ${p.allocs} · clone ${p.clones} · nested-loop ${p.nested_loops} · recursion ${p.recursion} · await ${p.async_points}`;
+  }
+  return `cyclomatic ${tile.cyclomatic} · ${tile.loc} LOC across ${tile.fnCount} fns`;
 }
 
-function bars(node: GraphNode): Bar[] {
-  const m = node.metrics;
-  return [
-    {
-      label: "architecture",
-      score: m.architecture.score,
-      detail: `fan-in ${m.architecture.fan_in} · fan-out ${m.architecture.fan_out}${m.architecture.in_cycle ? " · in cycle" : ""}`,
-    },
-    {
-      label: "security",
-      score: m.security.score,
-      detail: `unsafe ${m.security.unsafe_blocks} · unwrap ${m.security.unwraps} · panic ${m.security.panics} · cast ${m.security.lossy_casts}`,
-    },
-    {
-      label: "performance",
-      score: m.performance.score,
-      detail: `alloc ${m.performance.allocs} · clone ${m.performance.clones} · nested-loop ${m.performance.nested_loops} · recursion ${m.performance.recursion}`,
-    },
-    {
-      label: "complexity",
-      score: m.complexity.score,
-      detail: `cyclomatic ${m.complexity.cyclomatic} · nesting ${m.complexity.max_nesting} · ${m.complexity.loc} LOC`,
-    },
-  ];
-}
-
-export function Inspector({ node, lens, onClose }: InspectorProps): JSX.Element | null {
+export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): JSX.Element | null {
+  const [openFn, setOpenFn] = useState<TileFn | null>(null);
   const [source, setSource] = useState<string>("");
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!node || !node.file) {
-      setSource("");
-      return;
-    }
+    setOpenFn(null);
+    setSource("");
+  }, [tile]);
+
+  useEffect(() => {
+    if (!openFn) return;
     let cancelled = false;
-    setLoading(true);
-    fetchSource(node.file, node.span.start_line, node.span.end_line)
-      .then((text) => {
-        if (!cancelled) setSource(text);
-      })
-      .catch(() => {
-        if (!cancelled) setSource("// source unavailable");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+    fetchSource(openFn.file, openFn.start, openFn.end)
+      .then((t) => !cancelled && setSource(t))
+      .catch(() => !cancelled && setSource("// source unavailable"));
     return () => {
       cancelled = true;
     };
-  }, [node]);
+  }, [openFn]);
 
-  if (!node) return null;
+  if (!tile) return null;
+
+  const deps = crateDeps.get(tile.crate);
+  const topFns = [...tile.fns].sort((a, b) => b.scores[lens] - a.scores[lens]).slice(0, 8);
 
   return (
     <div className="inspector">
       <div className="inspector-head">
         <div>
-          <div className="inspector-name">{node.name}</div>
-          <div className="inspector-id">{node.id}</div>
+          <div className="inspector-name">{tile.name}</div>
+          <div className="inspector-id">{tile.crate}</div>
         </div>
         <button className="close" onClick={onClose}>
           ✕
@@ -81,32 +62,64 @@ export function Inspector({ node, lens, onClose }: InspectorProps): JSX.Element 
       </div>
 
       <div className="inspector-sub">
-        <span className="badge">{node.kind}</span>
-        <span className="badge">{node.crate}</span>
-        <span className="file">
-          {node.file}:{node.span.start_line}
-        </span>
+        <span className="badge">{tile.loc} LOC</span>
+        <span className="badge">{tile.fnCount} fns</span>
+        {tile.inCycle && <span className="badge cycle">in cycle</span>}
       </div>
 
       <div className="metrics">
-        {bars(node).map((b) => (
-          <div key={b.label} className={`metric ${b.label === lens ? "active" : ""}`}>
+        {METRIC_LENSES.map((l) => (
+          <div key={l} className={`metric ${l === lens ? "active" : ""}`}>
             <div className="metric-top">
-              <span>{b.label}</span>
-              <span>{(b.score * 100).toFixed(0)}%</span>
+              <span>{l}</span>
+              <span>{(tile.score[l] * 100).toFixed(0)}%</span>
             </div>
             <div className="metric-track">
-              <div className={`metric-fill ${b.label}`} style={{ width: `${b.score * 100}%` }} />
+              <div className={`metric-fill ${l}`} style={{ width: `${tile.score[l] * 100}%` }} />
             </div>
-            <div className="metric-detail">{b.detail}</div>
+            <div className="metric-detail">{rawDetail(tile, l)}</div>
           </div>
         ))}
       </div>
 
-      <div className="source">
-        <div className="source-head">source</div>
-        <pre>{loading ? "loading…" : source || "// no source"}</pre>
+      {deps && (deps.dependsOn.length > 0 || deps.dependedBy.length > 0) && (
+        <div className="deps">
+          {deps.dependsOn.length > 0 && (
+            <div className="dep-row">
+              <span className="dep-key">depends on</span> {deps.dependsOn.join(", ")}
+            </div>
+          )}
+          {deps.dependedBy.length > 0 && (
+            <div className="dep-row">
+              <span className="dep-key">used by</span> {deps.dependedBy.join(", ")}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="topfns">
+        <div className="topfns-head">hottest functions · {lens}</div>
+        {topFns.map((f) => (
+          <div
+            key={f.id}
+            className={`topfn ${openFn?.id === f.id ? "open" : ""}`}
+            onClick={() => setOpenFn(openFn?.id === f.id ? null : f)}
+          >
+            <span className="topfn-bar" style={{ width: `${Math.max(4, f.scores[lens] * 100)}%` }} />
+            <span className="topfn-name">{f.name}</span>
+            <span className="topfn-score">{(f.scores[lens] * 100).toFixed(0)}%</span>
+          </div>
+        ))}
       </div>
+
+      {openFn && (
+        <div className="source">
+          <div className="source-head">
+            {openFn.file}:{openFn.start}
+          </div>
+          <pre>{source || "loading…"}</pre>
+        </div>
+      )}
     </div>
   );
 }
