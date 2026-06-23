@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { hierarchy, treemap, type HierarchyRectangularNode } from "d3-hierarchy";
 import type { Lens } from "./schema";
 import type { Aggregation, Tile } from "./aggregate";
-import { crateColor, CYCLE_COLOR, mixColor } from "./lenses";
+import { crateColor, CYCLE_COLOR, heat, meanScore } from "./lenses";
 
 interface HNode {
   name: string;
@@ -108,7 +108,7 @@ export function Treemap({ agg, active, selectedId, onSelect, showDeps }: Treemap
           const tile = n.data.tile!;
           const w = n.x1 - n.x0;
           const h = n.y1 - n.y0;
-          const fill = active.size > 0 ? mixColor(active, tile.score) : crateColor(tile.crate, agg.crates);
+          const fill = active.size > 0 ? heat(meanScore(active, tile.score)) : crateColor(tile.crate, agg.crates);
           const selected = selectedId === tile.id;
           const showLabel = w > 46 && h > 18;
           return (

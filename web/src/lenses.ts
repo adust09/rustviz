@@ -34,38 +34,35 @@ export function crateColor(crate: string, allCrates: readonly string[]): string 
 
 export const CYCLE_COLOR = "#ff2d55";
 
-// --- comprehensive multi-lens coloring (RGB channel mix) ---
+// --- comprehensive multi-lens coloring (heatmap) ---
 //
-// Each metric lens drives one color channel; toggling any subset layers them
-// over the structural base. The channel brightness is the tile's normalized
-// 0..1 score for that metric, so every on/off combination yields a distinct
-// composite color (security+performance -> yellow, all three -> near-white).
+// Checking any subset of the metric lenses layers them over the structural base.
+// The active lenses' scores are averaged (see `meanScore`) into one 0..1 value
+// and mapped onto a single cool -> hot ramp, so the map reads on one axis.
 
-/** Per-lens display color, matching its RGB channel. */
-export const CHANNEL_COLOR: Record<Lens, string> = {
-  security: "#ff4d4d", // red channel
-  performance: "#4dff6a", // green channel
-  complexity: "#4d8bff", // blue channel
-};
-
-// A small floor keeps low-score / disabled channels visible (never pure black)
-// against the dark crate container.
-const CHANNEL_FLOOR = 26;
-
-function channel(on: boolean, score: number): number {
-  return on ? CHANNEL_FLOOR + clamp01(score) * (255 - CHANNEL_FLOOR) : CHANNEL_FLOOR;
+function hexToRgb(h: string): [number, number, number] {
+  const s = h.replace("#", "");
+  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
 }
 
-/** Tile fill for the active metric set, mixed across R (sec) / G (perf) / B (cmpx). */
-export function mixColor(active: ReadonlySet<Lens>, score: Record<Lens, number>): string {
-  return rgbToHex(
-    channel(active.has("security"), score.security),
-    channel(active.has("performance"), score.performance),
-    channel(active.has("complexity"), score.complexity),
-  );
+function lerpHex(a: string, b: string, t: number): string {
+  const [ar, ag, ab] = hexToRgb(a);
+  const [br, bg, bb] = hexToRgb(b);
+  const u = clamp01(t);
+  return rgbToHex(ar + (br - ar) * u, ag + (bg - ag) * u, ab + (bb - ab) * u);
 }
 
-/** Mean of the active metrics' scores (0 when none active) — used for ranking. */
+// Cool -> hot stops, exported so the legend gradient can reuse them.
+export const HEAT_LOW = "#243b6b";
+export const HEAT_MID = "#ffd23f";
+export const HEAT_HIGH = "#ff3b30";
+
+/** Cool -> hot heat ramp (blue -> yellow -> red) for a normalized 0..1 score. */
+export function heat(t: number): string {
+  return t < 0.5 ? lerpHex(HEAT_LOW, HEAT_MID, t * 2) : lerpHex(HEAT_MID, HEAT_HIGH, (t - 0.5) * 2);
+}
+
+/** Mean of the active metrics' scores (0 when none active) — drives heat + ranking. */
 export function meanScore(active: ReadonlySet<Lens>, score: Record<Lens, number>): number {
   if (active.size === 0) return 0;
   let sum = 0;

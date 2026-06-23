@@ -1,5 +1,5 @@
 import type { Graph, Lens } from "./schema";
-import { CHANNEL_COLOR } from "./lenses";
+import { HEAT_HIGH, HEAT_LOW, HEAT_MID } from "./lenses";
 
 interface ControlsProps {
   meta: Graph["meta"] | null;
@@ -20,17 +20,14 @@ const LENS_HINT: Record<Lens, string> = {
   complexity: "cyclomatic · nesting",
 };
 
-const CHANNEL_LABEL: Record<Lens, string> = {
-  security: "R",
-  performance: "G",
-  complexity: "B",
-};
+const HEAT_GRADIENT = `linear-gradient(90deg, ${HEAT_LOW}, ${HEAT_MID}, ${HEAT_HIGH})`;
 
 export function Controls(props: ControlsProps): JSX.Element {
   const { meta, active, lenses, onToggleLens, onClearLenses, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } =
     props;
 
-  const colorLabel = active.size === 0 ? "crate" : [...lenses].filter((l) => active.has(l)).join(" + ");
+  const hasLens = active.size > 0;
+  const colorLabel = hasLens ? [...lenses].filter((l) => active.has(l)).join(" + ") : "crate";
 
   return (
     <div className="controls">
@@ -46,24 +43,16 @@ export function Controls(props: ControlsProps): JSX.Element {
             <span className="lens-hint">crates · deps</span>
           </button>
 
-          {/* Metric lenses: check any subset; colors mix as RGB channels. */}
+          {/* Metric lenses: check any subset; scores average into one heat value. */}
           {lenses.map((l) => (
             <label
               key={l}
               className={`lens-check ${active.has(l) ? "active" : ""}`}
-              title={`${LENS_HINT[l]} — ${CHANNEL_LABEL[l]} channel`}
+              title={LENS_HINT[l]}
             >
-              <input
-                type="checkbox"
-                checked={active.has(l)}
-                onChange={() => onToggleLens(l)}
-                style={{ accentColor: CHANNEL_COLOR[l] }}
-              />
+              <input type="checkbox" checked={active.has(l)} onChange={() => onToggleLens(l)} />
               <span className="lens-check-text">
-                <span className="lens-name">
-                  <span className="lens-dot" style={{ background: CHANNEL_COLOR[l] }} />
-                  {l}
-                </span>
+                <span className="lens-name">{l}</span>
                 <span className="lens-hint">{LENS_HINT[l]}</span>
               </span>
             </label>
@@ -89,12 +78,21 @@ export function Controls(props: ControlsProps): JSX.Element {
         </form>
       </div>
 
-      {meta && (
-        <div className="meta">
-          {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC · tile area = LOC · color ={" "}
-          {colorLabel}
-        </div>
-      )}
+      <div className="controls-foot">
+        {meta && (
+          <div className="meta">
+            {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC · tile area = LOC · color ={" "}
+            {colorLabel}
+          </div>
+        )}
+        {hasLens && (
+          <div className="heat-legend" title="Average score of the checked lenses">
+            <span>low</span>
+            <span className="heat-bar" style={{ background: HEAT_GRADIENT }} />
+            <span>high</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -101,6 +101,6 @@ export type Graph = z.infer<typeof Graph>;
 
 // Architecture is no longer a lens — per-crate coloring is the map's structural
 // base view (see `App`/`Treemap`). These three are the metric lenses; any subset
-// can be toggled on at once and mixed as RGB channels (see `mixColor`).
+// can be checked at once and their scores average into one heat value (see `heat`).
 export const LENSES = ["security", "performance", "complexity"] as const;
 export type Lens = (typeof LENSES)[number];
