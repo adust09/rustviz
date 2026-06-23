@@ -3,8 +3,10 @@ import { fetchGraph } from "./api";
 import { Controls } from "./controls";
 import { Inspector } from "./inspector";
 import { Treemap } from "./treemap";
+import { DiagramView } from "./diagrams/DiagramView";
 import { aggregate, type Tile } from "./aggregate";
 import { LENSES, type Graph, type Lens } from "./schema";
+import type { RenderStyle, ViewMode } from "./diagrams/types";
 
 const EMPTY_DEPS = new Map();
 
@@ -17,6 +19,16 @@ export function App(): JSX.Element {
   const [selected, setSelected] = useState<Tile | null>(null);
   const [search, setSearch] = useState<string>("");
   const [showDeps, setShowDeps] = useState<boolean>(false);
+  // Map = the treemap; structure/sequence = the 立体 UML diagrams (one of three
+  // render styles). focusNodeId carries a structure-box click into the sequence.
+  const [viewMode, setViewMode] = useState<ViewMode>("map");
+  const [renderStyle, setRenderStyle] = useState<RenderStyle>("flat");
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+
+  const drillToSequence = (id: string): void => {
+    setFocusNodeId(id);
+    setViewMode("sequence");
+  };
 
   const toggleLens = (l: Lens): void =>
     setActive((prev) => {
@@ -55,13 +67,23 @@ export function App(): JSX.Element {
       {error && <div className="error">⚠ {error}</div>}
       {!agg && !error && <div className="loading">analyzing…</div>}
 
-      {agg && (
+      {agg && viewMode === "map" && (
         <Treemap
           agg={agg}
           active={active}
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
           showDeps={showDeps}
+        />
+      )}
+
+      {graph && viewMode !== "map" && (
+        <DiagramView
+          graph={graph}
+          diagramType={viewMode}
+          renderStyle={renderStyle}
+          focusNodeId={focusNodeId}
+          onDrillToSequence={drillToSequence}
         />
       )}
 
@@ -75,14 +97,20 @@ export function App(): JSX.Element {
         onSearchSubmit={onSearchSubmit}
         showDeps={showDeps}
         onToggleDeps={() => setShowDeps((v) => !v)}
+        viewMode={viewMode}
+        onSetViewMode={setViewMode}
+        renderStyle={renderStyle}
+        onSetRenderStyle={setRenderStyle}
       />
 
-      <Inspector
-        tile={selected}
-        active={active}
-        crateDeps={agg?.crateDeps ?? EMPTY_DEPS}
-        onClose={() => setSelected(null)}
-      />
+      {viewMode === "map" && (
+        <Inspector
+          tile={selected}
+          active={active}
+          crateDeps={agg?.crateDeps ?? EMPTY_DEPS}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
