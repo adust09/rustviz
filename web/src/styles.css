@@ -170,6 +170,38 @@ body,
   border-radius: 50%;
   flex: none;
 }
+/* Metric lenses as checkboxes — checked any subset, mixed as RGB channels. */
+.lens-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #161b24;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 6px 11px;
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lens-check:hover {
+  border-color: #34405a;
+}
+.lens-check.active {
+  border-color: var(--accent);
+  background: #18243f;
+}
+.lens-check input {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  cursor: pointer;
+}
+.lens-check-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
 .lens-hint {
   font-size: 10px;
   color: var(--muted);

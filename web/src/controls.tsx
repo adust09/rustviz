@@ -46,20 +46,27 @@ export function Controls(props: ControlsProps): JSX.Element {
             <span className="lens-hint">crates · deps</span>
           </button>
 
-          {/* Metric lenses: toggle any subset; colors mix as RGB channels. */}
+          {/* Metric lenses: check any subset; colors mix as RGB channels. */}
           {lenses.map((l) => (
-            <button
+            <label
               key={l}
-              className={`lens-btn ${active.has(l) ? "active" : ""}`}
-              onClick={() => onToggleLens(l)}
-              title={`${LENS_HINT[l]} — ${CHANNEL_LABEL[l]} channel (toggle)`}
+              className={`lens-check ${active.has(l) ? "active" : ""}`}
+              title={`${LENS_HINT[l]} — ${CHANNEL_LABEL[l]} channel`}
             >
-              <span className="lens-name">
-                <span className="lens-dot" style={{ background: CHANNEL_COLOR[l] }} />
-                {l}
+              <input
+                type="checkbox"
+                checked={active.has(l)}
+                onChange={() => onToggleLens(l)}
+                style={{ accentColor: CHANNEL_COLOR[l] }}
+              />
+              <span className="lens-check-text">
+                <span className="lens-name">
+                  <span className="lens-dot" style={{ background: CHANNEL_COLOR[l] }} />
+                  {l}
+                </span>
+                <span className="lens-hint">{LENS_HINT[l]}</span>
               </span>
-              <span className="lens-hint">{LENS_HINT[l]}</span>
-            </button>
+            </label>
           ))}
         </div>
 
