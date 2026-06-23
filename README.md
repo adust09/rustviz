@@ -34,6 +34,27 @@ rustviz /path/to/your/rust/project
 Metrics aggregate bottom-up: the analyzer emits raw per-function counts, the frontend sums
 them per module and normalizes across tiles. Switching lenses is an animated recolor.
 
+### 立体 UML views — understand the architecture in the round
+
+Beyond the treemap (**Map**), two diagram views turn the same analysis into UML you can read
+intuitively. The top-bar switch picks the view; a second switch picks one of **three render
+styles** so you can see the structure flat, with depth, or fully in 3D:
+
+- **Structure** — a UML **class diagram**: one box per type (`struct`/`enum`/`trait`) with its
+  attributes (fields / variants) and operations (methods), grouped onto per-crate slabs, wired
+  by trait-implementation and inter-type call edges.
+- **Sequence** — a UML **sequence diagram**: pick an entry point (or click a method in the
+  Structure view) and follow the *ordered* calls it makes, expanded as lifelines and messages.
+
+| Render style | How depth is shown |
+|--------------|--------------------|
+| **2D** (flat) | drop-shadows + crate slabs; the most legible overview |
+| **2.5D** (isometric) | true isometric projection — type boxes stand on the crate floor like a diorama |
+| **3D** (three.js) | a real rotatable / zoomable WebGL scene (loaded on demand) |
+
+Click an operation in Structure to jump to its call sequence; click a message to read the
+call-site source; click a lifeline to re-root the sequence on that function.
+
 ## How it works
 
 Three loosely-coupled layers joined by one JSON contract (see
@@ -45,12 +66,13 @@ rustviz <path>
         ↓ JSON
   [2] server  (Rust)   axum: /api/analyze, /api/source, embedded web assets
         ↓ HTTP (127.0.0.1)
-  [3] web     (TS)     aggregate to crate/module treemap (d3-hierarchy), lens recolor
+  [3] web     (TS)     treemap (d3-hierarchy) + UML structure/sequence diagrams (SVG / three.js)
 ```
 
 The analyzer emits only raw metric counts plus a normalized score; all aggregation and
 visual mapping live in the frontend, so adding a new lens is a one-file change
-(`web/src/lenses.ts`).
+(`web/src/lenses.ts`). The diagram views follow the same split: a render-agnostic **scene**
+is built once, and the **render style** (SVG vs three.js) is pluggable.
 
 ## Install & run
 

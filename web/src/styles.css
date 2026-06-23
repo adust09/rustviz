@@ -565,3 +565,29 @@ body,
   transform: rotateX(34deg) scale(0.92);
   transform-origin: top center;
 }
+
+/* --- three.js 3D --- */
+.three-mount {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.three-mount canvas {
+  display: block;
+}
+.three-label {
+  font: 600 11px ui-monospace, Menlo, monospace;
+  color: #dbe3ee;
+  background: #0b0f17cc;
+  border: 1px solid #2a3342;
+  border-radius: 5px;
+  padding: 1px 5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.three-crate-label {
+  font-weight: 700;
+  color: #c7d0dd;
+  background: transparent;
+  border: 0;
+}

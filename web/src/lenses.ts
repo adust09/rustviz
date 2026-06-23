@@ -1,7 +1,8 @@
 import type { Lens, Metrics } from "./schema";
 
 // Pure color helpers + the lens weight formulas (ported from analyzer/src/metrics).
-// No WebGL / three dependency — the architecture overview is plain SVG.
+// The treemap and the flat/isometric diagrams are plain SVG; only the 3D
+// diagram style pulls in three.js (lazy-loaded in web/src/diagrams).
 
 function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t));

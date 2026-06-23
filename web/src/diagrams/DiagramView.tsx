@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { fetchSource } from "../api";
 import type { Graph } from "../schema";
 import { buildStructureScene } from "./structureScene";
@@ -6,6 +6,10 @@ import { buildSequenceScene } from "./sequenceScene";
 import { LayeredRenderer } from "./LayeredRenderer";
 import { IsometricRenderer } from "./IsometricRenderer";
 import type { DiagramScene, RenderStyle } from "./types";
+
+// three.js is heavy and only the 3D style needs it — load it on demand so the
+// Map / 2D / 2.5D users never pay for the WebGL bundle.
+const ThreeRenderer = lazy(() => import("./ThreeRenderer"));
 
 interface DiagramViewProps {
   graph: Graph;
@@ -53,7 +57,9 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
         <IsometricRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
       )}
       {renderStyle === "3d" && (
-        <Placeholder scene={scene} renderStyle={renderStyle} onSelect={setSelectedId} selectedId={selectedId} onDrillToSequence={onDrillToSequence} onOpenSource={onOpenSource} />
+        <Suspense fallback={<div className="diagram-placeholder"><p>loading 3D…</p></div>}>
+          <ThreeRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
+        </Suspense>
       )}
       {open && (
         <div className="diagram-source">
@@ -66,51 +72,6 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
           <pre>{source || "loading…"}</pre>
         </div>
       )}
-    </div>
-  );
-}
-
-// Temporary text summary until the flat / iso / 3d renderers land. Confirms the
-// scene builders produce sensible geometry and that view switching is wired.
-function Placeholder(props: {
-  scene: DiagramScene;
-  renderStyle: RenderStyle;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onDrillToSequence: (id: string) => void;
-  onOpenSource: (file: string, start: number, end: number) => void;
-}): JSX.Element {
-  const { scene, renderStyle } = props;
-  if (scene.kind === "structure") {
-    return (
-      <div className="diagram-placeholder">
-        <p>
-          structure · {renderStyle} — {scene.boxes.length} boxes, {scene.crateSlabs.length} crates, {scene.edges.length} edges
-        </p>
-        <ul>
-          {scene.boxes.slice(0, 30).map((b) => (
-            <li key={b.id} onClick={() => props.onDrillToSequence(b.id)} style={{ cursor: "pointer" }}>
-              {b.title} · {b.fields.length + b.variants.length} attrs · {b.ops.length} ops
-            </li>
-          ))}
-        </ul>
-      </div>
-    );
-  }
-  return (
-    <div className="diagram-placeholder">
-      <p>
-        sequence · {renderStyle} — root {scene.rootTitle}, {scene.lifelines.length} participants, {scene.messages.length} messages
-      </p>
-      <ol>
-        {scene.messages.slice(0, 40).map((m) => (
-          <li key={m.row}>
-            {"› ".repeat(m.depth)}
-            {m.fromId.split("::").slice(-1)} → {m.label}
-            {m.selfCall ? " (self)" : ""}
-          </li>
-        ))}
-      </ol>
     </div>
   );
 }
