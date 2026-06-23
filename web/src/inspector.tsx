@@ -2,11 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { fetchSource } from "./api";
 import type { CrateDeps, Tile, TileFn } from "./aggregate";
 import type { Lens } from "./schema";
+import { meanScore } from "./lenses";
 
 interface InspectorProps {
   tile: Tile | null;
-  /** Active metric lens, or `null` for the structural base view. */
-  lens: Lens | null;
+  /** Active metric lenses; empty = structural base view. */
+  active: ReadonlySet<Lens>;
   crateDeps: Map<string, CrateDeps>;
   onClose: () => void;
 }
@@ -25,7 +26,7 @@ function rawDetail(tile: Tile, lens: Lens): string {
   return `cyclomatic ${tile.cyclomatic} · ${tile.loc} LOC across ${tile.fnCount} fns`;
 }
 
-export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): JSX.Element | null {
+export function Inspector({ tile, active, crateDeps, onClose }: InspectorProps): JSX.Element | null {
   const [openFn, setOpenFn] = useState<TileFn | null>(null);
   const [source, setSource] = useState<string>("");
   const panelRef = useRef<HTMLDivElement>(null);
@@ -73,12 +74,14 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
   if (!tile) return null;
 
   const deps = crateDeps.get(tile.crate);
-  // Structure view ranks functions by size; a metric lens ranks by its score.
-  const sorted = lens
-    ? [...tile.fns].sort((a, b) => b.scores[lens] - a.scores[lens])
+  const hasLens = active.size > 0;
+  // Structure view ranks functions by size; active lenses rank by their mean score.
+  const sorted = hasLens
+    ? [...tile.fns].sort((a, b) => meanScore(active, b.scores) - meanScore(active, a.scores))
     : [...tile.fns].sort((a, b) => b.loc - a.loc);
   const topFns = sorted.slice(0, 8);
   const maxFnLoc = Math.max(1, ...tile.fns.map((f) => f.loc));
+  const lensLabel = [...METRIC_LENSES].filter((l) => active.has(l)).join(" + ");
 
   return (
     <div className="inspector" ref={panelRef} style={pos ? { left: pos.x, top: pos.y, right: "auto" } : undefined}>
@@ -100,7 +103,7 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
 
       <div className="metrics">
         {METRIC_LENSES.map((l) => (
-          <div key={l} className={`metric ${l === lens ? "active" : ""}`}>
+          <div key={l} className={`metric ${active.has(l) ? "active" : ""}`}>
             <div className="metric-top">
               <span>{l}</span>
               <span>{(tile.score[l] * 100).toFixed(0)}%</span>
@@ -129,9 +132,9 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
       )}
 
       <div className="topfns">
-        <div className="topfns-head">{lens ? `hottest functions · ${lens}` : "largest functions"}</div>
+        <div className="topfns-head">{hasLens ? `hottest functions · ${lensLabel}` : "largest functions"}</div>
         {topFns.map((f) => {
-          const ratio = lens ? f.scores[lens] : f.loc / maxFnLoc;
+          const ratio = hasLens ? meanScore(active, f.scores) : f.loc / maxFnLoc;
           return (
             <div
               key={f.id}
@@ -140,7 +143,7 @@ export function Inspector({ tile, lens, crateDeps, onClose }: InspectorProps): J
             >
               <span className="topfn-bar" style={{ width: `${Math.max(4, ratio * 100)}%` }} />
               <span className="topfn-name">{f.name}</span>
-              <span className="topfn-score">{lens ? `${(f.scores[lens] * 100).toFixed(0)}%` : `${f.loc} LOC`}</span>
+              <span className="topfn-score">{hasLens ? `${(ratio * 100).toFixed(0)}%` : `${f.loc} LOC`}</span>
             </div>
           );
         })}

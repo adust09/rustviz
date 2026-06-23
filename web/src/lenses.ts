@@ -7,21 +7,9 @@ function clamp01(t: number): number {
   return Math.min(1, Math.max(0, t));
 }
 
-function hexToRgb(h: string): [number, number, number] {
-  const s = h.replace("#", "");
-  return [parseInt(s.slice(0, 2), 16), parseInt(s.slice(2, 4), 16), parseInt(s.slice(4, 6), 16)];
-}
-
 function rgbToHex(r: number, g: number, b: number): string {
   const f = (x: number): string => Math.round(x).toString(16).padStart(2, "0");
   return `#${f(r)}${f(g)}${f(b)}`;
-}
-
-function lerpHex(a: string, b: string, t: number): string {
-  const [ar, ag, ab] = hexToRgb(a);
-  const [br, bg, bb] = hexToRgb(b);
-  const u = clamp01(t);
-  return rgbToHex(ar + (br - ar) * u, ag + (bg - ag) * u, ab + (bb - ab) * u);
 }
 
 function hslToHex(h: number, s: number, l: number): string {
@@ -38,16 +26,6 @@ function hslToHex(h: number, s: number, l: number): string {
   return rgbToHex((rgb[0] + m) * 255, (rgb[1] + m) * 255, (rgb[2] + m) * 255);
 }
 
-/** Cool -> hot heat ramp (blue -> yellow -> red). */
-export function heat(t: number): string {
-  return t < 0.5 ? lerpHex("#243b6b", "#ffd23f", t * 2) : lerpHex("#ffd23f", "#ff3b30", (t - 0.5) * 2);
-}
-
-/** Low -> high complexity ramp (teal -> violet). */
-export function violet(t: number): string {
-  return lerpHex("#15695d", "#b14bff", t);
-}
-
 /** Stable per-crate hue (golden-angle spacing). */
 export function crateColor(crate: string, allCrates: readonly string[]): string {
   const idx = Math.max(0, allCrates.indexOf(crate));
@@ -56,9 +34,43 @@ export function crateColor(crate: string, allCrates: readonly string[]): string 
 
 export const CYCLE_COLOR = "#ff2d55";
 
-/** Tile fill for a metric lens and its normalized 0..1 score. */
-export function tileColor(lens: Lens, score: number): string {
-  return lens === "complexity" ? violet(score) : heat(score);
+// --- comprehensive multi-lens coloring (RGB channel mix) ---
+//
+// Each metric lens drives one color channel; toggling any subset layers them
+// over the structural base. The channel brightness is the tile's normalized
+// 0..1 score for that metric, so every on/off combination yields a distinct
+// composite color (security+performance -> yellow, all three -> near-white).
+
+/** Per-lens display color, matching its RGB channel. */
+export const CHANNEL_COLOR: Record<Lens, string> = {
+  security: "#ff4d4d", // red channel
+  performance: "#4dff6a", // green channel
+  complexity: "#4d8bff", // blue channel
+};
+
+// A small floor keeps low-score / disabled channels visible (never pure black)
+// against the dark crate container.
+const CHANNEL_FLOOR = 26;
+
+function channel(on: boolean, score: number): number {
+  return on ? CHANNEL_FLOOR + clamp01(score) * (255 - CHANNEL_FLOOR) : CHANNEL_FLOOR;
+}
+
+/** Tile fill for the active metric set, mixed across R (sec) / G (perf) / B (cmpx). */
+export function mixColor(active: ReadonlySet<Lens>, score: Record<Lens, number>): string {
+  return rgbToHex(
+    channel(active.has("security"), score.security),
+    channel(active.has("performance"), score.performance),
+    channel(active.has("complexity"), score.complexity),
+  );
+}
+
+/** Mean of the active metrics' scores (0 when none active) — used for ranking. */
+export function meanScore(active: ReadonlySet<Lens>, score: Record<Lens, number>): number {
+  if (active.size === 0) return 0;
+  let sum = 0;
+  for (const l of active) sum += score[l];
+  return sum / active.size;
 }
 
 // --- lens weight formulas (must match analyzer/src/metrics/*.rs) ---

@@ -1,10 +1,12 @@
 import type { Graph, Lens } from "./schema";
+import { CHANNEL_COLOR } from "./lenses";
 
 interface ControlsProps {
   meta: Graph["meta"] | null;
-  lens: Lens | null;
+  active: ReadonlySet<Lens>;
   lenses: readonly Lens[];
-  onLens: (l: Lens | null) => void;
+  onToggleLens: (l: Lens) => void;
+  onClearLenses: () => void;
   search: string;
   onSearch: (s: string) => void;
   onSearchSubmit: () => void;
@@ -18,31 +20,44 @@ const LENS_HINT: Record<Lens, string> = {
   complexity: "cyclomatic · nesting",
 };
 
+const CHANNEL_LABEL: Record<Lens, string> = {
+  security: "R",
+  performance: "G",
+  complexity: "B",
+};
+
 export function Controls(props: ControlsProps): JSX.Element {
-  const { meta, lens, lenses, onLens, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } = props;
+  const { meta, active, lenses, onToggleLens, onClearLenses, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } =
+    props;
+
+  const colorLabel = active.size === 0 ? "crate" : [...lenses].filter((l) => active.has(l)).join(" + ");
 
   return (
     <div className="controls">
       <div className="controls-row">
         <div className="lens-group">
-          {/* Structural base view: per-crate coloring, not a metric. */}
+          {/* Structural base view: per-crate coloring. Clears every metric layer. */}
           <button
-            className={`lens-btn structure ${lens === null ? "active" : ""}`}
-            onClick={() => onLens(null)}
+            className={`lens-btn structure ${active.size === 0 ? "active" : ""}`}
+            onClick={onClearLenses}
             title="Color tiles by crate — the structural base view"
           >
             <span className="lens-name">structure</span>
             <span className="lens-hint">crates · deps</span>
           </button>
 
+          {/* Metric lenses: toggle any subset; colors mix as RGB channels. */}
           {lenses.map((l) => (
             <button
               key={l}
-              className={`lens-btn ${l === lens ? "active" : ""}`}
-              onClick={() => onLens(l)}
-              title={LENS_HINT[l]}
+              className={`lens-btn ${active.has(l) ? "active" : ""}`}
+              onClick={() => onToggleLens(l)}
+              title={`${LENS_HINT[l]} — ${CHANNEL_LABEL[l]} channel (toggle)`}
             >
-              <span className="lens-name">{l}</span>
+              <span className="lens-name">
+                <span className="lens-dot" style={{ background: CHANNEL_COLOR[l] }} />
+                {l}
+              </span>
               <span className="lens-hint">{LENS_HINT[l]}</span>
             </button>
           ))}
@@ -70,7 +85,7 @@ export function Controls(props: ControlsProps): JSX.Element {
       {meta && (
         <div className="meta">
           {meta.crate_count} crates · {meta.file_count} files · {meta.total_loc} LOC · tile area = LOC · color ={" "}
-          {lens ?? "crate"}
+          {colorLabel}
         </div>
       )}
     </div>

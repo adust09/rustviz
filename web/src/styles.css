@@ -157,9 +157,18 @@ body,
   background: var(--border);
 }
 .lens-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 13px;
   font-weight: 600;
   text-transform: capitalize;
+}
+.lens-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
 }
 .lens-hint {
   font-size: 10px;

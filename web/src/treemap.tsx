@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { hierarchy, treemap, type HierarchyRectangularNode } from "d3-hierarchy";
 import type { Lens } from "./schema";
 import type { Aggregation, Tile } from "./aggregate";
-import { crateColor, CYCLE_COLOR, tileColor } from "./lenses";
+import { crateColor, CYCLE_COLOR, mixColor } from "./lenses";
 
 interface HNode {
   name: string;
@@ -14,8 +14,8 @@ interface HNode {
 
 interface TreemapProps {
   agg: Aggregation;
-  /** A metric lens (heat fill), or `null` for the structural base (per-crate fill). */
-  lens: Lens | null;
+  /** Active metric lenses (RGB-mix fill); empty = structural base (per-crate fill). */
+  active: ReadonlySet<Lens>;
   selectedId: string | null;
   onSelect: (tile: Tile) => void;
   showDeps: boolean;
@@ -32,7 +32,7 @@ function textOn(hex: string): string {
   return luminance(hex) > 0.6 ? "#10141b" : "#eef2f8";
 }
 
-export function Treemap({ agg, lens, selectedId, onSelect, showDeps }: TreemapProps): JSX.Element {
+export function Treemap({ agg, active, selectedId, onSelect, showDeps }: TreemapProps): JSX.Element {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 800, h: 600 });
   const [hover, setHover] = useState<string | null>(null);
@@ -108,7 +108,7 @@ export function Treemap({ agg, lens, selectedId, onSelect, showDeps }: TreemapPr
           const tile = n.data.tile!;
           const w = n.x1 - n.x0;
           const h = n.y1 - n.y0;
-          const fill = lens ? tileColor(lens, tile.score[lens]) : crateColor(tile.crate, agg.crates);
+          const fill = active.size > 0 ? mixColor(active, tile.score) : crateColor(tile.crate, agg.crates);
           const selected = selectedId === tile.id;
           const showLabel = w > 46 && h > 18;
           return (
