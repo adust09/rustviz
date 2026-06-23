@@ -507,3 +507,50 @@ body,
   margin: 0;
   white-space: pre;
 }
+
+/* --- Flat / shared diagram SVG text --- */
+.diag-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+.diag-crate {
+  font: 700 13px ui-sans-serif, system-ui, sans-serif;
+  fill: #c7d0dd;
+}
+.diag-tag {
+  font: 9px ui-monospace, Menlo, monospace;
+  opacity: 0.85;
+}
+.diag-title {
+  font: 700 11px ui-monospace, "SF Mono", Menlo, monospace;
+}
+.diag-attr {
+  font: 10.5px ui-monospace, Menlo, monospace;
+  fill: #aeb9c9;
+}
+.diag-op {
+  font: 10.5px ui-monospace, Menlo, monospace;
+  fill: #d6deea;
+  cursor: pointer;
+}
+.diag-op:hover {
+  fill: #ffd23f;
+}
+.diag-more {
+  font: 9.5px ui-monospace, Menlo, monospace;
+  fill: #6b7891;
+}
+.diag-life {
+  font: 600 11px ui-monospace, Menlo, monospace;
+  fill: #dbe3ee;
+}
+.diag-msg {
+  font: 10px ui-monospace, Menlo, monospace;
+  fill: #9fb0c6;
+  pointer-events: none;
+}
+.diag-empty {
+  font: 13px ui-monospace, Menlo, monospace;
+  fill: #6b7891;
+}

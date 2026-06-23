@@ -3,6 +3,7 @@ import { fetchSource } from "../api";
 import type { Graph } from "../schema";
 import { buildStructureScene } from "./structureScene";
 import { buildSequenceScene } from "./sequenceScene";
+import { LayeredRenderer } from "./LayeredRenderer";
 import type { DiagramScene, RenderStyle } from "./types";
 
 interface DiagramViewProps {
@@ -44,7 +45,17 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
 
   return (
     <div className="diagram-wrap">
-      <Placeholder scene={scene} renderStyle={renderStyle} onSelect={setSelectedId} selectedId={selectedId} onDrillToSequence={onDrillToSequence} onOpenSource={onOpenSource} />
+      {renderStyle === "flat" ? (
+        <LayeredRenderer
+          scene={scene}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onOpenSource={onOpenSource}
+          onDrillToSequence={onDrillToSequence}
+        />
+      ) : (
+        <Placeholder scene={scene} renderStyle={renderStyle} onSelect={setSelectedId} selectedId={selectedId} onDrillToSequence={onDrillToSequence} onOpenSource={onOpenSource} />
+      )}
       {open && (
         <div className="diagram-source">
           <div className="source-head">

@@ -12,10 +12,12 @@ import {
 // free functions. Boxes are grouped into per-crate slabs (layer 0) with the
 // boxes floating above (layer 1) so the 2.5D/3D renderers read as depth.
 
-const BOX_W = 210;
-const HEADER_H = 30;
-const ROW_H = 18;
-const GAP = 18;
+// Layout metrics (normalized units). Exported so renderers draw boxes at the
+// exact size the layout reserved for them.
+export const BOX_W = 210;
+export const HEADER_H = 30;
+export const ROW_H = 18;
+export const GAP = 18;
 const SLAB_PAD = 20;
 const BAND_GAP = 46;
 
