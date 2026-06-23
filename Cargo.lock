@@ -623,6 +623,7 @@ dependencies = [
  "cargo_metadata",
  "petgraph",
  "proc-macro2",
+ "quote",
  "serde",
  "serde_json",
  "syn",
