@@ -23,6 +23,9 @@ interface Ctx {
   dir: THREE.DirectionalLight;
   dirTarget: THREE.Object3D;
   picks: Map<string, THREE.Mesh>;
+  /** Per-building name labels, hidden when the camera is farther than labelCull. */
+  cityLabels: CSS2DObject[];
+  labelCull: number;
   raf: number;
 }
 
@@ -104,11 +107,15 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     const content = new THREE.Group();
     scene.add(content);
 
-    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, picks: new Map(), raf: 0 };
+    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, picks: new Map(), cityLabels: [], labelCull: Infinity, raf: 0 };
     ctxRef.current = ctx;
 
     const loop = (): void => {
       controls.update();
+      // Declutter: only show building name labels near the camera.
+      for (const bl of ctx.cityLabels) {
+        bl.element.style.display = camera.position.distanceTo(bl.position) < ctx.labelCull ? "" : "none";
+      }
       renderer.render(scene, camera);
       labels.render(scene, camera);
       ctx.raf = requestAnimationFrame(loop);
@@ -148,7 +155,8 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     if (!ctx) return;
     disposeGroup(ctx.content);
     ctx.picks.clear();
-    if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene, ctx.picks);
+    ctx.cityLabels = [];
+    if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene, ctx.picks, ctx.cityLabels);
     else buildSequence(ctx.content, props.scene);
     frameCamera(ctx);
   }, [props.scene]);
@@ -193,6 +201,8 @@ function frameCamera(ctx: Ctx): void {
   ctx.camera.far = radius * 20;
   ctx.camera.updateProjectionMatrix();
   ctx.controls.update();
+  // Building labels appear once the camera is within ~half the scene radius.
+  ctx.labelCull = radius * 0.55;
 
   // Aim the key light + its shadow frustum at the scene so shadows cover it.
   ctx.dir.position.set(center.x + radius * 0.85, center.y + radius * 1.7, center.z + radius * 0.95);
@@ -215,7 +225,7 @@ function frameCamera(ctx: Ctx): void {
 const FLOOR = 16;
 const MAX_BUILDING = 13;
 
-function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>): void {
+function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>, cityLabels: CSS2DObject[]): void {
   const layerY = (l: number): number => l * FLOOR;
   const centerOf = new Map<string, THREE.Vector3>();
 
@@ -258,6 +268,12 @@ function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<str
     mesh.userData.id = b.id;
     root.add(mesh);
     picks.set(b.id, mesh);
+
+    // Name label above the building (distance-culled in the render loop).
+    const label = makeLabel(b.title.split("::").pop() ?? b.title, "three-blabel");
+    label.position.set(cx, layerY(b.layer) + 0.3 + height + 0.5, cz);
+    root.add(label);
+    cityLabels.push(label);
   }
 
   // Crate dependency edges (district to district).

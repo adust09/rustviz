@@ -657,3 +657,14 @@ body,
   white-space: nowrap;
   pointer-events: none;
 }
+/* Per-building name label: compact, lighter; shown only near the camera. */
+.three-blabel {
+  font: 600 9.5px ui-monospace, Menlo, monospace;
+  color: #c7d0dd;
+  background: #0b0f17b3;
+  border-radius: 4px;
+  padding: 0 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
