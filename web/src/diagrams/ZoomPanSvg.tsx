@@ -20,6 +20,14 @@ interface View {
   ty: number;
 }
 
+/** A label that stays a constant on-screen size (like a map label) regardless
+ *  of zoom, positioned at a world coordinate. */
+export interface WorldLabel {
+  x: number;
+  y: number;
+  text: string;
+}
+
 interface ZoomPanSvgProps {
   contentW: number;
   contentH: number;
@@ -28,6 +36,8 @@ interface ZoomPanSvgProps {
   lodThresholds?: number[];
   /** World-coordinate skeleton drawn in the minimap (optional). */
   minimap?: React.ReactNode;
+  /** Non-scaling overlay labels anchored at world coords (optional). */
+  labels?: WorldLabel[];
   /** Static content (when LoD is not used). */
   children?: React.ReactNode;
   /** LoD content; receives the current level. Takes precedence over children. */
@@ -42,11 +52,14 @@ function lodFor(scale: number, thresholds?: number[]): number {
 }
 
 export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
-  const { contentW, contentH, defs, lodThresholds, minimap, children, render } = props;
+  const { contentW, contentH, defs, lodThresholds, minimap, labels, children, render } = props;
   const [ref, size] = useContainerSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
   const vpRef = useRef<SVGRectElement>(null);
+  const labelsRef = useRef<HTMLDivElement>(null);
+  const labelData = useRef<WorldLabel[]>(labels ?? []);
+  labelData.current = labels ?? [];
   const view = useRef<View>({ scale: 1, tx: 0, ty: 0 });
   const drag = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const interacted = useRef(false);
@@ -65,6 +78,20 @@ export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
       vpRef.current.setAttribute("y", String(-v.ty / v.scale));
       vpRef.current.setAttribute("width", String(size.w / v.scale));
       vpRef.current.setAttribute("height", String(size.h / v.scale));
+    }
+    const box = labelsRef.current;
+    if (box) {
+      const kids = box.children;
+      for (let i = 0; i < kids.length; i++) {
+        const l = labelData.current[i];
+        const el = kids[i] as HTMLElement;
+        if (!l) continue;
+        const sx = l.x * v.scale + v.tx;
+        const sy = l.y * v.scale + v.ty;
+        const vis = sx > -120 && sx < size.w + 120 && sy > -40 && sy < size.h + 40;
+        el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`;
+        el.style.opacity = vis ? "1" : "0";
+      }
     }
   };
 
@@ -174,6 +201,14 @@ export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
         <defs>{defs}</defs>
         <g ref={gRef}>{render ? render(lod) : children}</g>
       </svg>
+
+      {labels && (
+        <div className="zoom-labels" ref={labelsRef}>
+          {labels.map((l, i) => (
+            <div className="zoom-label" key={i}>{l.text}</div>
+          ))}
+        </div>
+      )}
 
       {minimap && (
         <svg

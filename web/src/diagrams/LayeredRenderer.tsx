@@ -18,7 +18,9 @@ import type {
 
 const CHAR_W = 6.1; // px per monospace glyph at 11px, for truncation budgeting
 const CRATE_HEAD_H = 26;
-const LOD_THRESHOLDS = [0.4, 1.1];
+// Scale breakpoints: < .22 = crate overview, .22–.9 = module frames + box
+// outlines, ≥ .9 = members (where box text is actually legible).
+const LOD_THRESHOLDS = [0.22, 0.9];
 
 const FLAT_DEFS = (
   <>
@@ -54,9 +56,10 @@ function FlatStructure({ scene, selectedId, onSelect, onDrillToSequence }: Rende
       fill={crateColor(c.name, scene.crateNames)} fillOpacity={0.5}
       stroke={crateColor(c.name, scene.crateNames)} strokeWidth={8} />
   ));
+  const labels = scene.crates.map((c) => ({ x: c.x + c.w / 2, y: c.y + CRATE_HEAD_H / 2, text: `${c.name} ·L${c.layer}` }));
 
   return (
-    <ZoomPanSvg contentW={scene.worldW + 60} contentH={scene.worldH + 60} defs={FLAT_DEFS} lodThresholds={LOD_THRESHOLDS} minimap={minimap} render={content} />
+    <ZoomPanSvg contentW={scene.worldW + 60} contentH={scene.worldH + 60} defs={FLAT_DEFS} lodThresholds={LOD_THRESHOLDS} minimap={minimap} labels={labels} render={content} />
   );
 
   function content(lod: number): React.ReactNode {
@@ -73,7 +76,7 @@ function FlatStructure({ scene, selectedId, onSelect, onDrillToSequence }: Rende
             if (!a || !b) return null;
             return (
               <line key={i} x1={a.x + a.w / 2} y1={a.y + a.h / 2} x2={b.x + b.w / 2} y2={b.y + b.h / 2}
-                stroke={e.mutual ? CYCLE_COLOR : "#5a6b86"} strokeWidth={2.2} opacity={0.5} markerEnd="url(#flatArrow)" />
+                stroke={e.mutual ? CYCLE_COLOR : "#7d8aa0"} strokeWidth={1.6} opacity={0.65} vectorEffect="non-scaling-stroke" markerEnd="url(#flatArrow)" />
             );
           })}
 
@@ -112,14 +115,14 @@ function FlatStructure({ scene, selectedId, onSelect, onDrillToSequence }: Rende
 function CrateRegion(props: { crate: CrateNode; names: string[]; selected: boolean; faded: boolean; onSelect: (id: string) => void }): JSX.Element {
   const { crate, names, selected, faded, onSelect } = props;
   const color = crateColor(crate.name, names);
+  // Filled with the crate colour (not near-black) so the layered structure is
+  // legible even when zoomed all the way out; borders are non-scaling so they
+  // stay visible at any zoom. The crate name is a non-scaling overlay label.
   return (
     <g onClick={() => onSelect(crate.name)} style={{ cursor: "pointer" }}>
-      <rect x={crate.x} y={crate.y} width={crate.w} height={crate.h} rx={12} fill="#0c1019" fillOpacity={faded ? 0.3 : 0.88}
-        stroke={selected ? "#ffffff" : color} strokeWidth={selected ? 2.6 : 1.8} strokeOpacity={0.85} />
-      <rect x={crate.x} y={crate.y} width={crate.w} height={CRATE_HEAD_H} rx={12} fill={color} fillOpacity={0.18} />
-      <circle cx={crate.x + 15} cy={crate.y + 13} r={5} fill={color} />
-      <text x={crate.x + 27} y={crate.y + 17} className="diag-crate">{crate.name}</text>
-      <text x={crate.x + crate.w - 9} y={crate.y + 17} className="diag-layer" textAnchor="end">L{crate.layer}</text>
+      <rect x={crate.x} y={crate.y} width={crate.w} height={crate.h} rx={12} fill={color} fillOpacity={faded ? 0.08 : 0.2}
+        stroke={selected ? "#ffffff" : color} strokeWidth={selected ? 2.4 : 1.6} strokeOpacity={0.95} vectorEffect="non-scaling-stroke" />
+      <rect x={crate.x} y={crate.y} width={crate.w} height={CRATE_HEAD_H} rx={12} fill={color} fillOpacity={faded ? 0.25 : 0.6} />
     </g>
   );
 }

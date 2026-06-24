@@ -593,6 +593,29 @@ body,
   font: 600 11px ui-monospace, Menlo, monospace;
   fill: #8595ab;
 }
+
+/* Non-scaling map labels: constant on-screen size, JS-positioned at world pts. */
+.zoom-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 2;
+}
+.zoom-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  font: 700 12px ui-monospace, "SF Mono", Menlo, monospace;
+  color: #eef2f8;
+  background: #0b0f17b3;
+  border: 1px solid #2a3342;
+  border-radius: 5px;
+  padding: 1px 6px;
+  text-shadow: 0 1px 2px #000;
+  will-change: transform;
+}
 .diag-layer {
   font: 700 11px ui-sans-serif, system-ui, sans-serif;
   fill: #6b7891;
