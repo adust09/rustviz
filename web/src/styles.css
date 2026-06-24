@@ -571,6 +571,73 @@ body,
   transform-origin: top center;
 }
 
+/* Detail panel — inspect a focused building (type) or district (crate). */
+.detail {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 300px;
+  max-height: calc(100% - 24px);
+  overflow: auto;
+  background: #0d1119ee;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  backdrop-filter: blur(4px);
+  z-index: 4;
+}
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.detail-tag {
+  font: 9px ui-monospace, Menlo, monospace;
+  color: #8595ab;
+}
+.detail-name {
+  font: 700 14px ui-monospace, "SF Mono", Menlo, monospace;
+  color: #eef2f8;
+  word-break: break-all;
+}
+.detail-sub {
+  font: 11px ui-monospace, Menlo, monospace;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.detail-badges {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 4px;
+}
+.detail-section {
+  margin-top: 10px;
+}
+.detail-section-h {
+  font: 10px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7891;
+  margin-bottom: 5px;
+}
+.detail-attr {
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #aeb9c9;
+  padding: 1px 0;
+  word-break: break-all;
+}
+.detail-op {
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #d6deea;
+  padding: 2px 0;
+  cursor: pointer;
+  word-break: break-all;
+}
+.detail-op:hover {
+  color: #ffd23f;
+}
+
 /* --- three.js 3D --- */
 .three-mount {
   position: absolute;

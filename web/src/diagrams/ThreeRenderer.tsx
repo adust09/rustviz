@@ -22,6 +22,7 @@ interface Ctx {
   content: THREE.Group;
   dir: THREE.DirectionalLight;
   dirTarget: THREE.Object3D;
+  picks: Map<string, THREE.Mesh>;
   raf: number;
 }
 
@@ -103,7 +104,7 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     const content = new THREE.Group();
     scene.add(content);
 
-    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, raf: 0 };
+    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, picks: new Map(), raf: 0 };
     ctxRef.current = ctx;
 
     const loop = (): void => {
@@ -146,10 +147,23 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     const ctx = ctxRef.current;
     if (!ctx) return;
     disposeGroup(ctx.content);
-    if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene);
+    ctx.picks.clear();
+    if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene, ctx.picks);
     else buildSequence(ctx.content, props.scene);
     frameCamera(ctx);
   }, [props.scene]);
+
+  // Highlight the focused building/district (emissive glow) without a rebuild.
+  useEffect(() => {
+    const ctx = ctxRef.current;
+    if (!ctx) return;
+    for (const [id, mesh] of ctx.picks) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      const on = id === props.selectedId;
+      mat.emissive.setHex(on ? 0x3b6cff : 0x000000);
+      mat.emissiveIntensity = on ? 0.55 : 0;
+    }
+  }, [props.selectedId, props.scene]);
 
   return <div ref={mountRef} className="three-mount" />;
 }
@@ -201,7 +215,7 @@ function frameCamera(ctx: Ctx): void {
 const FLOOR = 16;
 const MAX_BUILDING = 13;
 
-function buildStructure(root: THREE.Group, scene: StructureScene): void {
+function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>): void {
   const layerY = (l: number): number => l * FLOOR;
   const centerOf = new Map<string, THREE.Vector3>();
 
@@ -219,6 +233,7 @@ function buildStructure(root: THREE.Group, scene: StructureScene): void {
     mesh.receiveShadow = true;
     mesh.userData.id = c.name;
     root.add(mesh);
+    picks.set(c.name, mesh);
     centerOf.set(c.name, new THREE.Vector3(cx, y, cz));
     const label = makeLabel(`${c.name} ·L${c.layer}`, "three-label");
     label.position.set(cx, y + MAX_BUILDING + 2, cz);
@@ -242,6 +257,7 @@ function buildStructure(root: THREE.Group, scene: StructureScene): void {
     mesh.receiveShadow = true;
     mesh.userData.id = b.id;
     root.add(mesh);
+    picks.set(b.id, mesh);
   }
 
   // Crate dependency edges (district to district).

@@ -5,6 +5,7 @@ import { buildStructureScene } from "./structureScene";
 import { buildSequenceScene } from "./sequenceScene";
 import { LayeredRenderer } from "./LayeredRenderer";
 import { IsometricRenderer } from "./IsometricRenderer";
+import { DetailPanel } from "./DetailPanel";
 import type { DiagramScene, RenderStyle } from "./types";
 
 // three.js is heavy and only the 3D style needs it — load it on demand so the
@@ -34,6 +35,18 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
     () => (diagramType === "structure" ? buildStructureScene(graph) : buildSequenceScene(graph, focusNodeId)),
     [graph, diagramType, focusNodeId],
   );
+
+  // Clear the selection when the diagram/scene changes.
+  useEffect(() => {
+    setSelectedId(null);
+    setOpen(null);
+  }, [scene]);
+
+  // Resolve the selected building (type box) / district (crate) for the detail panel.
+  const detail =
+    scene.kind === "structure" && selectedId
+      ? { box: scene.boxes.find((b) => b.id === selectedId) ?? null, crate: scene.crates.find((c) => c.name === selectedId) ?? null }
+      : { box: null, crate: null };
 
   useEffect(() => {
     if (!open) return;
@@ -65,6 +78,7 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
   return (
     <div className="diagram-wrap">
       {body}
+      <DetailPanel box={detail.box} crate={detail.crate} onClose={() => setSelectedId(null)} onOpenSource={onOpenSource} />
       {open && (
         <div className="diagram-source">
           <div className="source-head">
