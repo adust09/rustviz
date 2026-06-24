@@ -201,17 +201,35 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
   return <div ref={mountRef} className="three-mount" />;
 }
 
+// Pick the building/lifeline whose projected center is nearest the click. In a
+// dense city of small towers this matches intent far better than a raycast
+// first-hit (which clips gaps and selects a taller tower behind the target).
 function pick(ctx: Ctx, mount: HTMLDivElement, ev: MouseEvent, props: RendererProps<DiagramScene>): void {
   const rect = mount.getBoundingClientRect();
-  const ndc = new THREE.Vector2(((ev.clientX - rect.left) / rect.width) * 2 - 1, -((ev.clientY - rect.top) / rect.height) * 2 + 1);
-  const ray = new THREE.Raycaster();
-  ray.setFromCamera(ndc, ctx.camera);
-  const hit = ray.intersectObjects(ctx.content.children, true).find((h) => h.object.userData.id);
-  if (!hit) return;
-  const id = hit.object.userData.id as string;
-  props.onSelect(id);
-  // Lifeline click re-roots the sequence; box click drills its sequence.
-  if (props.scene.kind === "sequence") props.onDrillToSequence?.(id);
+  const px = ev.clientX - rect.left;
+  const py = ev.clientY - rect.top;
+  const v = new THREE.Vector3();
+  let best: string | null = null;
+  let bestD = Infinity;
+  for (const [id, mesh] of ctx.picks) {
+    const geo = mesh.geometry as THREE.BoxGeometry;
+    const topY = (geo.parameters?.height ?? 0) / 2;
+    for (const oy of [0, topY]) {
+      v.set(mesh.position.x, mesh.position.y + oy, mesh.position.z).project(ctx.camera);
+      if (v.z > 1) continue;
+      const sx = (v.x * 0.5 + 0.5) * rect.width;
+      const sy = (-v.y * 0.5 + 0.5) * rect.height;
+      const d = Math.hypot(sx - px, sy - py);
+      if (d < bestD) {
+        bestD = d;
+        best = id;
+      }
+    }
+  }
+  if (best === null || bestD > 80) return;
+  props.onSelect(best);
+  // Lifeline click re-roots the sequence; building click just selects.
+  if (props.scene.kind === "sequence") props.onDrillToSequence?.(best);
 }
 
 function frameCamera(ctx: Ctx): void {
