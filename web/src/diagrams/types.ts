@@ -80,14 +80,28 @@ export interface CrateEdge {
   mutual: boolean;
 }
 
+/** A ground-plane region: a (role × dependency-layer) cell platform. */
+export interface Region {
+  id: string;
+  title: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  layer: number;
+}
+
 export interface StructureScene {
   kind: "structure";
+  /** Crates as bounding boxes of their member buildings — anchors for the
+   *  dependency wires (centroid to centroid). Not drawn as platforms. */
   crates: CrateNode[];
-  /** All type / module-fn boxes, at absolute world positions inside their crate. */
+  /** Role × dependency-layer cell platforms (the ground plane partition). */
+  regions: Region[];
+  /** All type / module-fn boxes, at absolute world positions (X = role zone,
+   *  Z = dependency-layer band); `layer` drives the Y elevation. */
   boxes: StructureBox[];
-  /** Intra detail edges (impls + aggregated type calls) — shown at LoD ≥ 1. */
-  edges: StructureEdge[];
-  /** Crate dependency arrows — shown at the overview (LoD 0). */
+  /** Crate→crate dependency arrows (wires). */
   crateEdges: CrateEdge[];
   crateNames: string[];
   layerCount: number;

@@ -245,9 +245,10 @@ function frameCamera(ctx: Ctx): void {
   sc.updateProjectionMatrix();
 }
 
-// 3D structure = a "code city": dependency layers are stacked tiers, each crate
-// is a district platform, and each type is a building whose height grows with
-// its member count. Real volume + lit faces + cast shadows give the 立体感.
+// 3D structure = a "code city": the ground plane is partitioned into role zones
+// (X) × dependency-layer bands (Z); each type is a building (height ∝ members),
+// elevated by its dependency layer (Y). Crate is shown by colour; crate
+// dependency wires connect crate centroids.
 const FLOOR = 16;
 const MAX_BUILDING = 13;
 
@@ -273,30 +274,35 @@ function styleWire(wire: Wire, focus: string | null): void {
 
 function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>, cityLabels: CSS2DObject[], wires: Wire[]): void {
   const layerY = (l: number): number => l * FLOOR;
-  const centerOf = new Map<string, THREE.Vector3>();
 
-  // District platforms (one per crate, at its dependency-layer elevation).
-  for (const c of scene.crates) {
-    const geo = new THREE.BoxGeometry(c.w * S, 0.6, c.h * S);
-    // Solid, dark crate-tinted ground tile so it catches the towers' shadows.
-    const color = hexToColor(crateColor(c.name, scene.crateNames)).multiplyScalar(0.4);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0 });
+  // Role-zone × layer cell platforms (neutral ground tiles, not pickable).
+  for (const rg of scene.regions) {
+    const geo = new THREE.BoxGeometry(rg.w * S, 0.5, rg.h * S);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x161d28, roughness: 0.95, metalness: 0, transparent: true, opacity: 0.6 });
     const mesh = new THREE.Mesh(geo, mat);
-    const cx = (c.x + c.w / 2) * S;
-    const cz = (c.y + c.h / 2) * S;
-    const y = layerY(c.layer);
-    mesh.position.set(cx, y, cz);
+    mesh.position.set((rg.x + rg.w / 2) * S, layerY(rg.layer), (rg.y + rg.h / 2) * S);
     mesh.receiveShadow = true;
-    mesh.userData.id = c.name;
     root.add(mesh);
-    picks.set(c.name, mesh);
-    centerOf.set(c.name, new THREE.Vector3(cx, y, cz));
-    const label = makeLabel(`${c.name} ·L${c.layer}`, "three-label");
-    label.position.set(cx, y + MAX_BUILDING + 2, cz);
+  }
+  // One role label per zone, placed on its top (nearest) layer.
+  const topByRole = new Map<string, (typeof scene.regions)[number]>();
+  for (const rg of scene.regions) {
+    const cur = topByRole.get(rg.title);
+    if (!cur || rg.layer > cur.layer) topByRole.set(rg.title, rg);
+  }
+  for (const rg of topByRole.values()) {
+    const label = makeLabel(rg.title, "three-label");
+    label.position.set((rg.x + rg.w / 2) * S, layerY(rg.layer) + MAX_BUILDING + 3, (rg.y + rg.h / 2) * S);
     root.add(label);
   }
 
-  // Buildings (one per type / module-fn box), standing on their district floor.
+  // Crate centroids → wire anchors (crates are not drawn as platforms here).
+  const centerOf = new Map<string, THREE.Vector3>();
+  for (const c of scene.crates) {
+    centerOf.set(c.name, new THREE.Vector3((c.x + c.w / 2) * S, layerY(c.layer), (c.y + c.h / 2) * S));
+  }
+
+  // Buildings (one per type / module-fn box), standing on their role/layer cell.
   for (const b of scene.boxes) {
     const members = b.fields.length + b.variants.length + b.ops.length;
     // Taller-than-wide so even average types read as blocks, not tiles.
