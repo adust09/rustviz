@@ -26,8 +26,24 @@ interface Ctx {
   /** Per-building name labels, hidden when the camera is farther than labelCull. */
   cityLabels: CSS2DObject[];
   labelCull: number;
+  /** Crate dependency wires, restyled to highlight the focused crate's edges. */
+  wires: Wire[];
   raf: number;
 }
+
+interface Wire {
+  line: THREE.Line;
+  source: string;
+  target: string;
+  mutual: boolean;
+}
+
+// Wire colours: depends-on (outgoing) warm, used-by (incoming) cyan, cycle red.
+const WIRE_OUT = 0xffd23f;
+const WIRE_IN = 0x3bd6ff;
+const WIRE_CYCLE = 0xff2d55;
+const WIRE_IDLE = 0x6b7a93;
+const WIRE_DIM = 0x39424f;
 
 function hexToColor(hex: string): THREE.Color {
   return new THREE.Color(hex);
@@ -107,7 +123,7 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     const content = new THREE.Group();
     scene.add(content);
 
-    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, picks: new Map(), cityLabels: [], labelCull: Infinity, raf: 0 };
+    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, picks: new Map(), cityLabels: [], labelCull: Infinity, wires: [], raf: 0 };
     ctxRef.current = ctx;
 
     const loop = (): void => {
@@ -156,12 +172,14 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     disposeGroup(ctx.content);
     ctx.picks.clear();
     ctx.cityLabels = [];
-    if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene, ctx.picks, ctx.cityLabels);
+    ctx.wires = [];
+    if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene, ctx.picks, ctx.cityLabels, ctx.wires);
     else buildSequence(ctx.content, props.scene);
     frameCamera(ctx);
   }, [props.scene]);
 
-  // Highlight the focused building/district (emissive glow) without a rebuild.
+  // Highlight the focused building (emissive) + the wires of its crate, without
+  // a rebuild. Outgoing deps glow warm, incoming (used-by) cyan, cycles red.
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx) return;
@@ -171,6 +189,14 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
       mat.emissive.setHex(on ? 0x3b6cff : 0x000000);
       mat.emissiveIntensity = on ? 0.55 : 0;
     }
+
+    const sc = props.scene;
+    let focus: string | null = null;
+    if (sc.kind === "structure" && props.selectedId) {
+      const b = sc.boxes.find((x) => x.id === props.selectedId);
+      focus = b ? b.crate : sc.crates.some((c) => c.name === props.selectedId) ? props.selectedId : null;
+    }
+    for (const wire of ctx.wires) styleWire(wire, focus);
   }, [props.selectedId, props.scene]);
 
   return <div ref={mountRef} className="three-mount" />;
@@ -225,7 +251,27 @@ function frameCamera(ctx: Ctx): void {
 const FLOOR = 16;
 const MAX_BUILDING = 13;
 
-function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>, cityLabels: CSS2DObject[]): void {
+// Restyle a wire for the focused crate: idle when nothing is focused; otherwise
+// the focused crate's outgoing/incoming/cyclic edges light up and the rest dim.
+function styleWire(wire: Wire, focus: string | null): void {
+  const mat = wire.line.material as THREE.LineBasicMaterial;
+  if (!focus) {
+    mat.color.setHex(wire.mutual ? WIRE_CYCLE : WIRE_IDLE);
+    mat.opacity = 0.5;
+    return;
+  }
+  const out = wire.source === focus;
+  const inc = wire.target === focus;
+  if (out || inc) {
+    mat.color.setHex(wire.mutual ? WIRE_CYCLE : out ? WIRE_OUT : WIRE_IN);
+    mat.opacity = 0.95;
+  } else {
+    mat.color.setHex(WIRE_DIM);
+    mat.opacity = 0.12;
+  }
+}
+
+function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>, cityLabels: CSS2DObject[], wires: Wire[]): void {
   const layerY = (l: number): number => l * FLOOR;
   const centerOf = new Map<string, THREE.Vector3>();
 
@@ -276,14 +322,16 @@ function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<str
     cityLabels.push(label);
   }
 
-  // Crate dependency edges (district to district).
+  // Crate dependency wires (district to district).
   for (const e of scene.crateEdges) {
     const a = centerOf.get(e.source);
     const b = centerOf.get(e.target);
     if (!a || !b) continue;
     const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const mat = new THREE.LineBasicMaterial({ color: e.mutual ? 0xff2d55 : 0x6b7a93, transparent: true, opacity: 0.5 });
-    root.add(new THREE.Line(geo, mat));
+    const mat = new THREE.LineBasicMaterial({ color: e.mutual ? WIRE_CYCLE : WIRE_IDLE, transparent: true, opacity: 0.5 });
+    const line = new THREE.Line(geo, mat);
+    root.add(line);
+    wires.push({ line, source: e.source, target: e.target, mutual: e.mutual });
   }
 }
 

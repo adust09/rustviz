@@ -21,6 +21,20 @@ export function DetailPanel({ box, crate, onClose, onOpenSource }: DetailPanelPr
   return null;
 }
 
+// Explains the dependency-wire colours that light up for the focused crate.
+function WireLegend(): JSX.Element {
+  return (
+    <div className="detail-section">
+      <div className="detail-section-h">dependency wires (this crate)</div>
+      <div className="detail-legend">
+        <span><i style={{ background: "#ffd23f" }} /> depends on</span>
+        <span><i style={{ background: "#3bd6ff" }} /> used by</span>
+        <span><i style={{ background: "#ff2d55" }} /> cycle</span>
+      </div>
+    </div>
+  );
+}
+
 function BoxDetail({ box, onClose, onOpenSource }: { box: StructureBox; onClose: () => void; onOpenSource: (f: string, s: number, e: number) => void }): JSX.Element {
   const attrs = [...box.fields.map(fieldLine), ...box.variants.map(variantLine)];
   return (
@@ -58,6 +72,8 @@ function BoxDetail({ box, onClose, onOpenSource }: { box: StructureBox; onClose:
           ))}
         </div>
       )}
+
+      <WireLegend />
     </div>
   );
 }
@@ -83,6 +99,8 @@ function CrateDetail({ crate, onClose }: { crate: CrateNode; onClose: () => void
           <div key={m.id} className="detail-attr">{m.title}</div>
         ))}
       </div>
+
+      <WireLegend />
     </div>
   );
 }

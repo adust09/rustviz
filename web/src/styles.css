@@ -637,6 +637,24 @@ body,
 .detail-op:hover {
   color: #ffd23f;
 }
+.detail-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font: 10px ui-sans-serif, system-ui, sans-serif;
+  color: #aeb9c9;
+}
+.detail-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.detail-legend i {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
 
 /* --- three.js 3D --- */
 .three-mount {
