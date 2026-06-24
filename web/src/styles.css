@@ -589,6 +589,34 @@ body,
   font: 13px ui-monospace, Menlo, monospace;
   fill: #6b7891;
 }
+.diag-mod {
+  font: 600 11px ui-monospace, Menlo, monospace;
+  fill: #8595ab;
+}
+.diag-layer {
+  font: 700 11px ui-sans-serif, system-ui, sans-serif;
+  fill: #6b7891;
+}
+
+/* Minimap: world skeleton + live viewport rectangle (orientation aid). */
+.minimap {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  background: #0b0f17cc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px;
+  backdrop-filter: blur(3px);
+  cursor: crosshair;
+  z-index: 3;
+}
+.minimap-vp {
+  fill: #ffffff1f;
+  stroke: #eef2f8;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
 
 /* Iso sequence: tilt the flat temporal plane back into 3D for depth. Only the
    svg tilts — the zoom controls stay flat and usable. */
@@ -597,7 +625,7 @@ body,
   inset: 0;
   perspective: 1400px;
 }
-.iso-tilt .diag-zoom > svg {
+.iso-tilt .diag-zoom > svg:not(.minimap) {
   transform: rotateX(30deg);
   transform-origin: top center;
 }

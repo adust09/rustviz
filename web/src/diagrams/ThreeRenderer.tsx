@@ -168,43 +168,35 @@ function frameCamera(ctx: Ctx): void {
   ctx.controls.update();
 }
 
+// 3D structure = dependency layers as stacked floors, one slab per crate, with
+// crate dependency edges. Coarse on purpose (crate granularity); per-member LoD
+// is left to the 2D/2.5D views for now.
 function buildStructure(root: THREE.Group, scene: StructureScene): void {
-  for (const slab of scene.crateSlabs) {
-    const geo = new THREE.BoxGeometry(slab.w * S, 0.4, slab.h * S);
-    const mat = new THREE.MeshStandardMaterial({ color: hexToColor(crateColor(slab.crate, scene.crateNames)), transparent: true, opacity: 0.18, roughness: 0.9 });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set((slab.x + slab.w / 2) * S, -0.2, (slab.y + slab.h / 2) * S);
-    root.add(mesh);
-    const label = makeLabel(slab.title, "three-label three-crate-label");
-    label.position.set(slab.x * S, 0.4, slab.y * S);
-    root.add(label);
-  }
-
+  const FLOOR = 14;
   const centerOf = new Map<string, THREE.Vector3>();
-  for (const b of scene.boxes) {
-    const members = b.fields.length + b.variants.length + b.ops.length;
-    const height = Math.min(8, 0.8 + members * 0.35);
-    const geo = new THREE.BoxGeometry(b.w * S, height, b.h * S * 0.5);
-    const color = hexToColor(crateColor(b.crate, scene.crateNames));
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.1 });
+  for (const c of scene.crates) {
+    const geo = new THREE.BoxGeometry(c.w * S, 1.2, c.h * S);
+    const color = hexToColor(crateColor(c.name, scene.crateNames));
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1, transparent: true, opacity: 0.92 });
     const mesh = new THREE.Mesh(geo, mat);
-    const cx = (b.x + b.w / 2) * S;
-    const cz = (b.y + b.h / 2) * S;
-    mesh.position.set(cx, height / 2, cz);
-    mesh.userData.id = b.id;
+    const cx = (c.x + c.w / 2) * S;
+    const cz = (c.y + c.h / 2) * S;
+    const y = c.layer * FLOOR;
+    mesh.position.set(cx, y, cz);
+    mesh.userData.id = c.name;
     root.add(mesh);
-    centerOf.set(b.id, new THREE.Vector3(cx, height, cz));
-    const label = makeLabel(b.title, "three-label");
-    label.position.set(cx, height + 0.6, cz);
+    centerOf.set(c.name, new THREE.Vector3(cx, y, cz));
+    const label = makeLabel(`${c.name} ·L${c.layer}`, "three-label");
+    label.position.set(cx, y + 1.5, cz);
     root.add(label);
   }
 
-  for (const e of scene.edges) {
+  for (const e of scene.crateEdges) {
     const a = centerOf.get(e.source);
-    const c = centerOf.get(e.target);
-    if (!a || !c) continue;
-    const geo = new THREE.BufferGeometry().setFromPoints([a, c]);
-    const mat = new THREE.LineBasicMaterial({ color: e.kind === "impls" ? 0x7d8aa0 : 0x3d5478, transparent: true, opacity: 0.5 });
+    const b = centerOf.get(e.target);
+    if (!a || !b) continue;
+    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const mat = new THREE.LineBasicMaterial({ color: e.mutual ? 0xff2d55 : 0x6b7a93, transparent: true, opacity: 0.6 });
     root.add(new THREE.Line(geo, mat));
   }
 }

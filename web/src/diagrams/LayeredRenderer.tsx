@@ -1,8 +1,9 @@
-import { crateColor } from "../lenses";
+import { crateColor, CYCLE_COLOR } from "../lenses";
 import { fieldLine, kindTag, opLine, textOn, truncate, variantLine } from "./format";
-import { BOX_W, FIELD_CAP, HEADER_H, OP_CAP, ROW_H } from "./structureScene";
+import { FIELD_CAP, HEADER_H, OP_CAP, ROW_H } from "./structureScene";
 import { ZoomPanSvg } from "./ZoomPanSvg";
 import type {
+  CrateNode,
   DiagramScene,
   RendererProps,
   SequenceScene,
@@ -10,12 +11,14 @@ import type {
   StructureScene,
 } from "./types";
 
-// Flat (2D) renderer. Layer depth is implied by drop-shadows + the crate slabs
-// the boxes sit on, rather than projection. Handles both diagram types. Pan +
-// wheel-zoom come from the shared ZoomPanSvg wrapper.
+// Flat (2D) renderer. Handles both diagram types. The structure diagram is a
+// dependency-layered, semantic-zoom map: at LoD 0 only crate regions + dep
+// arrows; zoom in (LoD 1) reveals module frames + type boxes; further (LoD 2)
+// expands members. Pan + wheel-zoom + minimap come from ZoomPanSvg.
 
-const PAD = 30;
 const CHAR_W = 6.1; // px per monospace glyph at 11px, for truncation budgeting
+const CRATE_HEAD_H = 26;
+const LOD_THRESHOLDS = [0.4, 1.1];
 
 const FLAT_DEFS = (
   <>
@@ -43,42 +46,81 @@ export function LayeredRenderer(props: RendererProps<DiagramScene>): JSX.Element
 // ---------- Structure (UML class diagram) ----------
 
 function FlatStructure({ scene, selectedId, onSelect, onDrillToSequence }: RendererProps<StructureScene>): JSX.Element {
-  const maxX = Math.max(BOX_W, ...scene.crateSlabs.map((s) => s.x + s.w), ...scene.boxes.map((b) => b.x + b.w));
-  const maxY = Math.max(0, ...scene.crateSlabs.map((s) => s.y + s.h), ...scene.boxes.map((b) => b.y + b.h));
-  const center = new Map(scene.boxes.map((b) => [b.id, { x: b.x + b.w / 2, y: b.y + b.h / 2 }]));
+  const crateById = new Map(scene.crates.map((c) => [c.name, c]));
+  const boxCenter = new Map(scene.boxes.map((b) => [b.id, { x: b.x + b.w / 2, y: b.y + b.h / 2 }]));
+
+  const minimap = scene.crates.map((c) => (
+    <rect key={c.name} x={c.x} y={c.y} width={c.w} height={c.h} rx={8}
+      fill={crateColor(c.name, scene.crateNames)} fillOpacity={0.5}
+      stroke={crateColor(c.name, scene.crateNames)} strokeWidth={8} />
+  ));
 
   return (
-    <ZoomPanSvg contentW={maxX + PAD} contentH={maxY + PAD} defs={FLAT_DEFS}>
-      {scene.crateSlabs.map((s) => (
-        <g key={s.id}>
-          <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={12} fill="#0d121c" stroke={crateColor(s.crate, scene.crateNames)} strokeOpacity={0.5} strokeWidth={1.5} />
-          <circle cx={s.x + 14} cy={s.y + 15} r={5} fill={crateColor(s.crate, scene.crateNames)} />
-          <text x={s.x + 26} y={s.y + 19} className="diag-crate">{s.title}</text>
-        </g>
-      ))}
+    <ZoomPanSvg contentW={scene.worldW + 60} contentH={scene.worldH + 60} defs={FLAT_DEFS} lodThresholds={LOD_THRESHOLDS} minimap={minimap} render={content} />
+  );
 
-      {scene.edges.map((e, i) => {
-        const a = center.get(e.source);
-        const b = center.get(e.target);
-        if (!a || !b) return null;
-        const impl = e.kind === "impls";
-        return (
-          <line
-            key={`${e.source}->${e.target}-${i}`}
-            x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-            stroke={impl ? "#7d8aa0" : "#4d5d78"}
-            strokeWidth={impl ? 1.4 : 1}
-            strokeDasharray={impl ? "6 4" : undefined}
-            opacity={impl ? 0.8 : 0.4}
-            markerEnd={impl ? "url(#flatImpl)" : "url(#flatArrow)"}
-          />
-        );
-      })}
+  function content(lod: number): React.ReactNode {
+    return (
+      <>
+        {scene.crates.map((c) => (
+          <CrateRegion key={c.name} crate={c} names={scene.crateNames} selected={selectedId === c.name} faded={lod >= 1} onSelect={onSelect} />
+        ))}
 
-      {scene.boxes.map((b) => (
-        <UmlBox key={b.id} box={b} crateNames={scene.crateNames} selected={selectedId === b.id} onSelect={onSelect} onDrill={onDrillToSequence} />
-      ))}
-    </ZoomPanSvg>
+        {lod === 0 &&
+          scene.crateEdges.map((e, i) => {
+            const a = crateById.get(e.source);
+            const b = crateById.get(e.target);
+            if (!a || !b) return null;
+            return (
+              <line key={i} x1={a.x + a.w / 2} y1={a.y + a.h / 2} x2={b.x + b.w / 2} y2={b.y + b.h / 2}
+                stroke={e.mutual ? CYCLE_COLOR : "#5a6b86"} strokeWidth={2.2} opacity={0.5} markerEnd="url(#flatArrow)" />
+            );
+          })}
+
+        {lod >= 1 &&
+          scene.crates.flatMap((c) =>
+            c.modules.map((f) => (
+              <g key={f.id}>
+                <rect x={f.x} y={f.y} width={f.w} height={f.h} rx={6} fill="#0e141e" stroke="#26303f" strokeWidth={1} />
+                <text x={f.x + 8} y={f.y + 14} className="diag-mod">{f.title}</text>
+              </g>
+            )),
+          )}
+
+        {lod >= 1 &&
+          scene.edges.map((e, i) => {
+            const a = boxCenter.get(e.source);
+            const b = boxCenter.get(e.target);
+            if (!a || !b) return null;
+            const impl = e.kind === "impls";
+            return (
+              <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={impl ? "#7d8aa0" : "#3d5478"}
+                strokeWidth={1} strokeDasharray={impl ? "6 4" : undefined} opacity={0.22}
+                markerEnd={impl ? "url(#flatImpl)" : "url(#flatArrow)"} />
+            );
+          })}
+
+        {lod >= 1 &&
+          scene.boxes.map((b) => (
+            <UmlBox key={b.id} box={b} crateNames={scene.crateNames} selected={selectedId === b.id} detail={lod >= 2} onSelect={onSelect} onDrill={onDrillToSequence} />
+          ))}
+      </>
+    );
+  }
+}
+
+function CrateRegion(props: { crate: CrateNode; names: string[]; selected: boolean; faded: boolean; onSelect: (id: string) => void }): JSX.Element {
+  const { crate, names, selected, faded, onSelect } = props;
+  const color = crateColor(crate.name, names);
+  return (
+    <g onClick={() => onSelect(crate.name)} style={{ cursor: "pointer" }}>
+      <rect x={crate.x} y={crate.y} width={crate.w} height={crate.h} rx={12} fill="#0c1019" fillOpacity={faded ? 0.3 : 0.88}
+        stroke={selected ? "#ffffff" : color} strokeWidth={selected ? 2.6 : 1.8} strokeOpacity={0.85} />
+      <rect x={crate.x} y={crate.y} width={crate.w} height={CRATE_HEAD_H} rx={12} fill={color} fillOpacity={0.18} />
+      <circle cx={crate.x + 15} cy={crate.y + 13} r={5} fill={color} />
+      <text x={crate.x + 27} y={crate.y + 17} className="diag-crate">{crate.name}</text>
+      <text x={crate.x + crate.w - 9} y={crate.y + 17} className="diag-layer" textAnchor="end">L{crate.layer}</text>
+    </g>
   );
 }
 
@@ -86,10 +128,11 @@ function UmlBox(props: {
   box: StructureBox;
   crateNames: string[];
   selected: boolean;
+  detail: boolean;
   onSelect: (id: string) => void;
   onDrill?: (id: string) => void;
 }): JSX.Element {
-  const { box, crateNames, selected, onSelect, onDrill } = props;
+  const { box, crateNames, selected, detail, onSelect, onDrill } = props;
   const color = crateColor(box.crate, crateNames);
   const charLimit = Math.floor((box.w - 16) / CHAR_W);
   const attrs = [...box.fields.map(fieldLine), ...box.variants.map(variantLine)];
@@ -97,38 +140,31 @@ function UmlBox(props: {
   const shownOps = box.ops.slice(0, OP_CAP);
   const attrTop = HEADER_H + 4;
   const opsTop = attrTop + shownAttrs.length * ROW_H + (shownAttrs.length ? 6 : 0);
+  const h = detail ? box.h : HEADER_H;
 
   return (
     <g transform={`translate(${box.x},${box.y})`} onClick={() => onSelect(box.id)} style={{ cursor: "pointer" }}>
-      <rect width={box.w} height={box.h} rx={7} fill="#121a26" stroke={selected ? "#ffffff" : color} strokeWidth={selected ? 2.2 : 1.2} filter="url(#flatShadow)" />
+      <rect width={box.w} height={h} rx={7} fill="#121a26" stroke={selected ? "#ffffff" : color} strokeWidth={selected ? 2.2 : 1.2} filter="url(#flatShadow)" />
       <path d={`M0,${HEADER_H} L0,7 Q0,0 7,0 L${box.w - 7},0 Q${box.w},0 ${box.w},7 L${box.w},${HEADER_H} Z`} fill={color} />
       <text x={8} y={13} className="diag-tag" fill={textOn(color)}>{kindTag(box.kind)}</text>
       <text x={8} y={25} className="diag-title" fill={textOn(color)}>{truncate(box.title, charLimit)}</text>
 
-      {shownAttrs.map((line, i) => (
+      {detail && shownAttrs.map((line, i) => (
         <text key={`a${i}`} x={8} y={attrTop + 13 + i * ROW_H} className="diag-attr">{truncate(line, charLimit)}</text>
       ))}
-      {attrs.length > FIELD_CAP && (
+      {detail && attrs.length > FIELD_CAP && (
         <text x={8} y={attrTop + 13 + FIELD_CAP * ROW_H} className="diag-more">+{attrs.length - FIELD_CAP} more</text>
       )}
 
-      {shownAttrs.length > 0 && box.ops.length > 0 && <line x1={0} y1={opsTop - 4} x2={box.w} y2={opsTop - 4} stroke="#2a3342" />}
-      {shownOps.map((op, i) => (
-        <text
-          key={op.id}
-          x={8}
-          y={opsTop + 13 + i * ROW_H}
-          className="diag-op"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDrill?.(op.id);
-          }}
-        >
+      {detail && shownAttrs.length > 0 && box.ops.length > 0 && <line x1={0} y1={opsTop - 4} x2={box.w} y2={opsTop - 4} stroke="#2a3342" />}
+      {detail && shownOps.map((op, i) => (
+        <text key={op.id} x={8} y={opsTop + 13 + i * ROW_H} className="diag-op"
+          onClick={(e) => { e.stopPropagation(); onDrill?.(op.id); }}>
           <title>{`${opLine(op)}  →  sequence`}</title>
           {truncate(opLine(op), charLimit)}
         </text>
       ))}
-      {box.ops.length > OP_CAP && (
+      {detail && box.ops.length > OP_CAP && (
         <text x={8} y={opsTop + 13 + OP_CAP * ROW_H} className="diag-more">+{box.ops.length - OP_CAP} more</text>
       )}
     </g>

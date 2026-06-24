@@ -49,12 +49,54 @@ export interface StructureEdge {
   kind: "impls" | "calls";
 }
 
+/** Level of detail, driven by zoom: 0 = crates only, 1 = + module frames &
+ *  type titles, 2 = + members (full UML boxes). */
+export type Lod = 0 | 1 | 2;
+
+/** A module sub-frame inside a crate region (absolute world coords). */
+export interface ModuleFrame {
+  id: string;
+  title: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  boxIds: string[];
+}
+
+/** A crate region, placed by dependency layer. Fixed world position. */
+export interface CrateNode {
+  name: string;
+  /** Dependency layer: 0 = foundation (bottom), higher = depends-on-more (top). */
+  layer: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  modules: ModuleFrame[];
+  boxIds: string[];
+}
+
+/** A crate→crate dependency arrow (overview level). */
+export interface CrateEdge {
+  source: string;
+  target: string;
+  mutual: boolean;
+}
+
 export interface StructureScene {
   kind: "structure";
-  crateSlabs: StructureBox[];
+  crates: CrateNode[];
+  /** All type / module-fn boxes, at absolute world positions inside their crate. */
   boxes: StructureBox[];
+  /** Intra detail edges (impls + aggregated type calls) — shown at LoD ≥ 1. */
   edges: StructureEdge[];
+  /** Crate dependency arrows — shown at the overview (LoD 0). */
+  crateEdges: CrateEdge[];
   crateNames: string[];
+  layerCount: number;
+  worldW: number;
+  worldH: number;
 }
 
 /** A participant column in the sequence diagram. */

@@ -1,13 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useContainerSize } from "./useSize";
 
 // Pan + wheel-zoom wrapper for the SVG diagram renderers (flat / iso), giving
-// them the same zoom/pan affordance as the three.js view. The transform is
-// applied imperatively to the inner <g> so panning/zooming never re-renders the
-// (potentially thousands of) child nodes.
+// them the same zoom/pan affordance as the three.js view, plus:
+//   - semantic level-of-detail (LoD): `render(lod)` is re-evaluated only when the
+//     zoom scale crosses a threshold, so detail appears/disappears as you zoom
+//     while continuous pan/zoom stays imperative (no per-frame React re-render).
+//   - an optional minimap (world skeleton + a live viewport rectangle) for
+//     "where am I" orientation on a large, stable map.
 
-const MIN = 0.04;
-const MAX = 12;
+const MIN = 0.02;
+const MAX = 14;
+const MINIMAP_MAX = 190;
 const clamp = (v: number): number => Math.min(MAX, Math.max(MIN, v));
 
 interface View {
@@ -16,24 +20,57 @@ interface View {
   ty: number;
 }
 
-export function ZoomPanSvg(props: {
+interface ZoomPanSvgProps {
   contentW: number;
   contentH: number;
   defs?: React.ReactNode;
-  children: React.ReactNode;
-}): JSX.Element {
-  const { contentW, contentH, defs, children } = props;
+  /** Ascending scale breakpoints; lod = how many have been passed. */
+  lodThresholds?: number[];
+  /** World-coordinate skeleton drawn in the minimap (optional). */
+  minimap?: React.ReactNode;
+  /** Static content (when LoD is not used). */
+  children?: React.ReactNode;
+  /** LoD content; receives the current level. Takes precedence over children. */
+  render?: (lod: number) => React.ReactNode;
+}
+
+function lodFor(scale: number, thresholds?: number[]): number {
+  if (!thresholds) return 0;
+  let n = 0;
+  for (const t of thresholds) if (scale >= t) n++;
+  return n;
+}
+
+export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
+  const { contentW, contentH, defs, lodThresholds, minimap, children, render } = props;
   const [ref, size] = useContainerSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
+  const vpRef = useRef<SVGRectElement>(null);
   const view = useRef<View>({ scale: 1, tx: 0, ty: 0 });
   const drag = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const interacted = useRef(false);
   const lastKey = useRef("");
+  const [lod, setLod] = useState(0);
+
+  const mmScale = minimap ? Math.min(MINIMAP_MAX / contentW, MINIMAP_MAX / contentH) : 0;
+  const mmW = contentW * mmScale;
+  const mmH = contentH * mmScale;
 
   const apply = (): void => {
     const v = view.current;
     gRef.current?.setAttribute("transform", `translate(${v.tx} ${v.ty}) scale(${v.scale})`);
+    if (vpRef.current) {
+      vpRef.current.setAttribute("x", String(-v.tx / v.scale));
+      vpRef.current.setAttribute("y", String(-v.ty / v.scale));
+      vpRef.current.setAttribute("width", String(size.w / v.scale));
+      vpRef.current.setAttribute("height", String(size.h / v.scale));
+    }
+  };
+
+  const syncLod = (): void => {
+    const next = lodFor(view.current.scale, lodThresholds);
+    setLod((prev) => (prev === next ? prev : next));
   };
 
   const fit = (): void => {
@@ -41,6 +78,7 @@ export function ZoomPanSvg(props: {
     const s = clamp(Math.min(size.w / contentW, size.h / contentH) * 0.92);
     view.current = { scale: s, tx: (size.w - contentW * s) / 2, ty: Math.max(14, (size.h - contentH * s) / 2) };
     apply();
+    syncLod();
   };
 
   const zoomAt = (cx: number, cy: number, factor: number): void => {
@@ -51,10 +89,17 @@ export function ZoomPanSvg(props: {
     v.scale = ns;
     interacted.current = true;
     apply();
+    syncLod();
   };
 
-  // Auto-fit on a new scene; also fit when the container size first arrives,
-  // but stop once the user has zoomed/panned.
+  const centerOnWorld = (wx: number, wy: number): void => {
+    const v = view.current;
+    v.tx = size.w / 2 - wx * v.scale;
+    v.ty = size.h / 2 - wy * v.scale;
+    interacted.current = true;
+    apply();
+  };
+
   useEffect(() => {
     const key = `${contentW}x${contentH}`;
     if (key !== lastKey.current) {
@@ -63,9 +108,9 @@ export function ZoomPanSvg(props: {
     }
     if (interacted.current) apply();
     else fit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentW, contentH, size.w, size.h]);
 
-  // Native non-passive wheel listener so we can preventDefault page scroll.
   useEffect(() => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -76,6 +121,7 @@ export function ZoomPanSvg(props: {
     };
     svg.addEventListener("wheel", onWheel, { passive: false });
     return () => svg.removeEventListener("wheel", onWheel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onPointerDown = (e: React.PointerEvent): void => {
@@ -86,7 +132,7 @@ export function ZoomPanSvg(props: {
     const d = drag.current;
     if (!d) return;
     if (!d.active) {
-      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return; // let small moves stay clicks
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
       d.active = true;
       interacted.current = true;
       svgRef.current?.setPointerCapture(e.pointerId);
@@ -106,6 +152,12 @@ export function ZoomPanSvg(props: {
     drag.current = null;
   };
 
+  const onMinimap = (e: React.PointerEvent): void => {
+    if (e.buttons !== 1) return;
+    const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+    centerOnWorld((e.clientX - rect.left) / mmScale, (e.clientY - rect.top) / mmScale);
+  };
+
   return (
     <div ref={ref} className="diag-zoom">
       <svg
@@ -120,8 +172,23 @@ export function ZoomPanSvg(props: {
         onPointerLeave={endPan}
       >
         <defs>{defs}</defs>
-        <g ref={gRef}>{children}</g>
+        <g ref={gRef}>{render ? render(lod) : children}</g>
       </svg>
+
+      {minimap && (
+        <svg
+          className="minimap"
+          width={mmW}
+          height={mmH}
+          viewBox={`0 0 ${contentW} ${contentH}`}
+          onPointerDown={onMinimap}
+          onPointerMove={onMinimap}
+        >
+          {minimap}
+          <rect ref={vpRef} className="minimap-vp" x={0} y={0} width={contentW} height={contentH} />
+        </svg>
+      )}
+
       <div className="zoom-ctl">
         <button onClick={() => zoomAt(size.w / 2, size.h / 2, 1.3)} title="Zoom in">＋</button>
         <button onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / 1.3)} title="Zoom out">－</button>
