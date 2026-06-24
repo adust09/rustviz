@@ -43,7 +43,6 @@ const WIRE_OUT = 0xffd23f;
 const WIRE_IN = 0x3bd6ff;
 const WIRE_CYCLE = 0xff2d55;
 const WIRE_IDLE = 0x6b7a93;
-const WIRE_DIM = 0x39424f;
 
 function hexToColor(hex: string): THREE.Color {
   return new THREE.Color(hex);
@@ -252,24 +251,17 @@ function frameCamera(ctx: Ctx): void {
 const FLOOR = 16;
 const MAX_BUILDING = 13;
 
-// Restyle a wire for the focused crate: idle when nothing is focused; otherwise
-// the focused crate's outgoing/incoming/cyclic edges light up and the rest dim.
+// Wires are shown only for the focused crate: outgoing (depends-on) warm,
+// incoming (used-by) cyan, cycle red; everything else is hidden to avoid the
+// scattered-crate clutter.
 function styleWire(wire: Wire, focus: string | null): void {
+  const related = focus !== null && (wire.source === focus || wire.target === focus);
+  wire.line.visible = related;
+  if (!related) return;
   const mat = wire.line.material as THREE.LineBasicMaterial;
-  if (!focus) {
-    mat.color.setHex(wire.mutual ? WIRE_CYCLE : WIRE_IDLE);
-    mat.opacity = 0.5;
-    return;
-  }
   const out = wire.source === focus;
-  const inc = wire.target === focus;
-  if (out || inc) {
-    mat.color.setHex(wire.mutual ? WIRE_CYCLE : out ? WIRE_OUT : WIRE_IN);
-    mat.opacity = 0.95;
-  } else {
-    mat.color.setHex(WIRE_DIM);
-    mat.opacity = 0.12;
-  }
+  mat.color.setHex(wire.mutual ? WIRE_CYCLE : out ? WIRE_OUT : WIRE_IN);
+  mat.opacity = 0.95;
 }
 
 function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<string, THREE.Mesh>, cityLabels: CSS2DObject[], wires: Wire[]): void {
@@ -296,13 +288,10 @@ function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<str
     root.add(label);
   }
 
-  // Crate centroids → wire anchors (crates are not drawn as platforms here).
-  const centerOf = new Map<string, THREE.Vector3>();
-  for (const c of scene.crates) {
-    centerOf.set(c.name, new THREE.Vector3((c.x + c.w / 2) * S, layerY(c.layer), (c.y + c.h / 2) * S));
-  }
-
   // Buildings (one per type / module-fn box), standing on their role/layer cell.
+  // Track each crate's tallest building — its landmark, used as the wire anchor
+  // (the role layout scatters a crate's types, so a bbox centroid is meaningless).
+  const anchor = new Map<string, { v: THREE.Vector3; members: number; isType: boolean }>();
   for (const b of scene.boxes) {
     const members = b.fields.length + b.variants.length + b.ops.length;
     // Taller-than-wide so even average types read as blocks, not tiles.
@@ -314,28 +303,38 @@ function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<str
     const mesh = new THREE.Mesh(geo, mat);
     const cx = (b.x + b.w / 2) * S;
     const cz = (b.y + b.h / 2) * S;
-    mesh.position.set(cx, layerY(b.layer) + 0.3 + height / 2, cz);
+    const top = layerY(b.layer) + 0.3 + height;
+    mesh.position.set(cx, top - height / 2, cz);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.userData.id = b.id;
     root.add(mesh);
     picks.set(b.id, mesh);
 
+    // Landmark = tallest real type (struct/enum/trait), preferred over module-fn
+    // boxes so wires anchor on a representative type rather than a test module.
+    const isType = b.kind !== "modulefns";
+    const cur = anchor.get(b.crate);
+    const beats = !cur || (isType !== cur.isType ? isType : members > cur.members);
+    if (beats) anchor.set(b.crate, { v: new THREE.Vector3(cx, top + 1.2, cz), members, isType });
+
     // Name label above the building (distance-culled in the render loop).
     const label = makeLabel(b.title.split("::").pop() ?? b.title, "three-blabel");
-    label.position.set(cx, layerY(b.layer) + 0.3 + height + 0.5, cz);
+    label.position.set(cx, top + 0.5, cz);
     root.add(label);
     cityLabels.push(label);
   }
 
-  // Crate dependency wires (district to district).
+  // Crate dependency wires: anchored at each crate's landmark (tallest) building,
+  // and hidden until a building is focused (see styleWire) to avoid clutter.
   for (const e of scene.crateEdges) {
-    const a = centerOf.get(e.source);
-    const b = centerOf.get(e.target);
+    const a = anchor.get(e.source)?.v;
+    const b = anchor.get(e.target)?.v;
     if (!a || !b) continue;
     const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const mat = new THREE.LineBasicMaterial({ color: e.mutual ? WIRE_CYCLE : WIRE_IDLE, transparent: true, opacity: 0.5 });
+    const mat = new THREE.LineBasicMaterial({ color: WIRE_IDLE, transparent: true, opacity: 0.9 });
     const line = new THREE.Line(geo, mat);
+    line.visible = false;
     root.add(line);
     wires.push({ line, source: e.source, target: e.target, mutual: e.mutual });
   }
