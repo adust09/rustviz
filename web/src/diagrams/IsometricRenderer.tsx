@@ -1,8 +1,19 @@
 import { crateColor } from "../lenses";
 import { fieldLine, kindTag, opLine, textOn, truncate, variantLine } from "./format";
 import { FlatSequence } from "./LayeredRenderer";
-import { useContainerSize } from "./useSize";
+import { ZoomPanSvg } from "./ZoomPanSvg";
 import type { RendererProps, DiagramScene, StructureBox, StructureScene } from "./types";
+
+const ISO_DEFS = (
+  <>
+    <filter id="isoShadow" x="-30%" y="-30%" width="160%" height="180%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#000" floodOpacity="0.5" />
+    </filter>
+    <marker id="isoArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa6b6" />
+    </marker>
+  </>
+);
 
 // Isometric 2.5D renderer. The structure diagram is drawn as a true isometric
 // diorama: crate slabs are floor parallelograms, type boxes are upright
@@ -57,8 +68,6 @@ interface Placed {
 }
 
 function IsoStructure({ scene, selectedId, onSelect, onDrillToSequence }: RendererProps<StructureScene>): JSX.Element {
-  const [ref, size] = useContainerSize<HTMLDivElement>();
-
   const placed: Placed[] = scene.boxes.map((box) => {
     const anchor = project(box.x + box.w / 2, box.y + box.h / 2);
     const h = cardHeight(box);
@@ -85,21 +94,10 @@ function IsoStructure({ scene, selectedId, onSelect, onDrillToSequence }: Render
   const oy = PAD - Math.min(...ys);
   const w = Math.max(...xs) - Math.min(...xs) + PAD * 2;
   const h = Math.max(...ys) - Math.min(...ys) + PAD * 2;
-  const vw = Math.max(w, size.w);
-  const vh = Math.max(h, size.h);
 
   return (
-    <div ref={ref} className="diag-scroll">
-      <svg width={vw} height={vh} viewBox={`0 0 ${vw} ${vh}`}>
-        <defs>
-          <filter id="isoShadow" x="-30%" y="-30%" width="160%" height="180%">
-            <feDropShadow dx="0" dy="5" stdDeviation="5" floodColor="#000" floodOpacity="0.5" />
-          </filter>
-          <marker id="isoArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#9aa6b6" />
-          </marker>
-        </defs>
-        <g transform={`translate(${ox},${oy})`}>
+    <ZoomPanSvg contentW={w} contentH={h} defs={ISO_DEFS}>
+      <g transform={`translate(${ox},${oy})`}>
           {/* floor slabs */}
           {slabPolys.map(({ slab, pts }) => (
             <g key={slab.id}>
@@ -144,9 +142,8 @@ function IsoStructure({ scene, selectedId, onSelect, onDrillToSequence }: Render
               onDrill={onDrillToSequence}
             />
           ))}
-        </g>
-      </svg>
-    </div>
+      </g>
+    </ZoomPanSvg>
   );
 }
 

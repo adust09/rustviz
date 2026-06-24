@@ -514,6 +514,41 @@ body,
   inset: 0;
   overflow: auto;
 }
+/* Pan/zoom surface (flat + iso). The svg fills the container; navigation is
+   wheel-zoom + drag-pan, so no scrollbars. */
+.diag-zoom {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.diag-zoom > svg {
+  display: block;
+}
+.zoom-ctl {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 3;
+}
+.zoom-ctl button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #0e131ccc;
+  color: #d6deea;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(3px);
+}
+.zoom-ctl button:hover {
+  background: #243049;
+  color: #eef2f8;
+}
 .diag-crate {
   font: 700 13px ui-sans-serif, system-ui, sans-serif;
   fill: #c7d0dd;
@@ -555,14 +590,15 @@ body,
   fill: #6b7891;
 }
 
-/* Iso sequence: tilt the flat temporal plane back into 3D for depth. */
+/* Iso sequence: tilt the flat temporal plane back into 3D for depth. Only the
+   svg tilts — the zoom controls stay flat and usable. */
 .iso-tilt {
   position: absolute;
   inset: 0;
   perspective: 1400px;
 }
-.iso-tilt .diag-scroll {
-  transform: rotateX(34deg) scale(0.92);
+.iso-tilt .diag-zoom > svg {
+  transform: rotateX(30deg);
   transform-origin: top center;
 }
 

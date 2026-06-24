@@ -1,7 +1,7 @@
 import { crateColor } from "../lenses";
 import { fieldLine, kindTag, opLine, textOn, truncate, variantLine } from "./format";
 import { BOX_W, FIELD_CAP, HEADER_H, OP_CAP, ROW_H } from "./structureScene";
-import { useContainerSize } from "./useSize";
+import { ZoomPanSvg } from "./ZoomPanSvg";
 import type {
   DiagramScene,
   RendererProps,
@@ -11,10 +11,25 @@ import type {
 } from "./types";
 
 // Flat (2D) renderer. Layer depth is implied by drop-shadows + the crate slabs
-// the boxes sit on, rather than projection. Handles both diagram types.
+// the boxes sit on, rather than projection. Handles both diagram types. Pan +
+// wheel-zoom come from the shared ZoomPanSvg wrapper.
 
 const PAD = 30;
 const CHAR_W = 6.1; // px per monospace glyph at 11px, for truncation budgeting
+
+const FLAT_DEFS = (
+  <>
+    <filter id="flatShadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000" floodOpacity="0.45" />
+    </filter>
+    <marker id="flatArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9aa6b6" />
+    </marker>
+    <marker id="flatImpl" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+      <path d="M0,0 L12,6 L0,12 z" fill="#0b0f17" stroke="#7d8aa0" strokeWidth="1" />
+    </marker>
+  </>
+);
 
 export function LayeredRenderer(props: RendererProps<DiagramScene>): JSX.Element {
   const { scene, ...rest } = props;
@@ -22,30 +37,6 @@ export function LayeredRenderer(props: RendererProps<DiagramScene>): JSX.Element
     <FlatStructure scene={scene} {...rest} />
   ) : (
     <FlatSequence scene={scene} {...rest} />
-  );
-}
-
-function ScrollSvg({ w, h, children }: { w: number; h: number; children: React.ReactNode }): JSX.Element {
-  const [ref, size] = useContainerSize<HTMLDivElement>();
-  const vw = Math.max(w, size.w);
-  const vh = Math.max(h, size.h);
-  return (
-    <div ref={ref} className="diag-scroll">
-      <svg width={vw} height={vh} viewBox={`0 0 ${vw} ${vh}`}>
-        <defs>
-          <filter id="flatShadow" x="-20%" y="-20%" width="140%" height="160%">
-            <feDropShadow dx="0" dy="6" stdDeviation="6" floodColor="#000" floodOpacity="0.45" />
-          </filter>
-          <marker id="flatArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M0,0 L10,5 L0,10 z" fill="#9aa6b6" />
-          </marker>
-          <marker id="flatImpl" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
-            <path d="M0,0 L12,6 L0,12 z" fill="#0b0f17" stroke="#7d8aa0" strokeWidth="1" />
-          </marker>
-        </defs>
-        {children}
-      </svg>
-    </div>
   );
 }
 
@@ -57,7 +48,7 @@ function FlatStructure({ scene, selectedId, onSelect, onDrillToSequence }: Rende
   const center = new Map(scene.boxes.map((b) => [b.id, { x: b.x + b.w / 2, y: b.y + b.h / 2 }]));
 
   return (
-    <ScrollSvg w={maxX + PAD} h={maxY + PAD}>
+    <ZoomPanSvg contentW={maxX + PAD} contentH={maxY + PAD} defs={FLAT_DEFS}>
       {scene.crateSlabs.map((s) => (
         <g key={s.id}>
           <rect x={s.x} y={s.y} width={s.w} height={s.h} rx={12} fill="#0d121c" stroke={crateColor(s.crate, scene.crateNames)} strokeOpacity={0.5} strokeWidth={1.5} />
@@ -87,7 +78,7 @@ function FlatStructure({ scene, selectedId, onSelect, onDrillToSequence }: Rende
       {scene.boxes.map((b) => (
         <UmlBox key={b.id} box={b} crateNames={scene.crateNames} selected={selectedId === b.id} onSelect={onSelect} onDrill={onDrillToSequence} />
       ))}
-    </ScrollSvg>
+    </ZoomPanSvg>
   );
 }
 
@@ -156,14 +147,14 @@ export function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDril
 
   if (scene.lifelines.length === 0) {
     return (
-      <ScrollSvg w={600} h={300}>
+      <ZoomPanSvg contentW={600} contentH={300} defs={FLAT_DEFS}>
         <text x={40} y={60} className="diag-empty">no resolved calls from {scene.rootTitle}</text>
-      </ScrollSvg>
+      </ZoomPanSvg>
     );
   }
 
   return (
-    <ScrollSvg w={w} h={bottom + SEQ.margin}>
+    <ZoomPanSvg contentW={w} contentH={bottom + SEQ.margin} defs={FLAT_DEFS}>
       {/* lifelines */}
       {scene.lifelines.map((l) => {
         const x = colX(l.col);
@@ -204,6 +195,6 @@ export function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDril
           </g>
         );
       })}
-    </ScrollSvg>
+    </ZoomPanSvg>
   );
 }
