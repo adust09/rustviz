@@ -20,6 +20,8 @@ interface Ctx {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   content: THREE.Group;
+  dir: THREE.DirectionalLight;
+  dirTarget: THREE.Object3D;
   raf: number;
 }
 
@@ -65,6 +67,8 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(w, h);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     mount.appendChild(renderer.domElement);
 
     const labels = new CSS2DRenderer();
@@ -75,12 +79,21 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     mount.appendChild(labels.domElement);
 
     const scene = new THREE.Scene();
-    scene.add(new THREE.AmbientLight(0xffffff, 0.85));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.7);
-    dir.position.set(20, 40, 30);
+    // Sky/ground hemisphere + low ambient + a raking key light give the
+    // buildings clear lit/shadowed faces (volume), and the key light casts
+    // shadows onto the district floors.
+    scene.add(new THREE.HemisphereLight(0xbcd3ff, 0x0a0e16, 0.5));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.22));
+    const dir = new THREE.DirectionalLight(0xffffff, 1.0);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.bias = -0.0006;
+    const dirTarget = new THREE.Object3D();
+    dir.target = dirTarget;
     scene.add(dir);
+    scene.add(dirTarget);
 
-    const camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 2000);
+    const camera = new THREE.PerspectiveCamera(55, w / h, 0.1, 4000);
     camera.position.set(30, 36, 46);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -90,7 +103,7 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     const content = new THREE.Group();
     scene.add(content);
 
-    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, raf: 0 };
+    const ctx: Ctx = { renderer, labels, scene, camera, controls, content, dir, dirTarget, raf: 0 };
     ctxRef.current = ctx;
 
     const loop = (): void => {
@@ -166,37 +179,78 @@ function frameCamera(ctx: Ctx): void {
   ctx.camera.far = radius * 20;
   ctx.camera.updateProjectionMatrix();
   ctx.controls.update();
+
+  // Aim the key light + its shadow frustum at the scene so shadows cover it.
+  ctx.dir.position.set(center.x + radius * 0.85, center.y + radius * 1.7, center.z + radius * 0.95);
+  ctx.dirTarget.position.copy(center);
+  ctx.dirTarget.updateMatrixWorld();
+  const sc = ctx.dir.shadow.camera;
+  const s = radius * 1.4;
+  sc.left = -s;
+  sc.right = s;
+  sc.top = s;
+  sc.bottom = -s;
+  sc.near = radius * 0.1;
+  sc.far = radius * 6;
+  sc.updateProjectionMatrix();
 }
 
-// 3D structure = dependency layers as stacked floors, one slab per crate, with
-// crate dependency edges. Coarse on purpose (crate granularity); per-member LoD
-// is left to the 2D/2.5D views for now.
+// 3D structure = a "code city": dependency layers are stacked tiers, each crate
+// is a district platform, and each type is a building whose height grows with
+// its member count. Real volume + lit faces + cast shadows give the 立体感.
+const FLOOR = 16;
+const MAX_BUILDING = 13;
+
 function buildStructure(root: THREE.Group, scene: StructureScene): void {
-  const FLOOR = 14;
+  const layerY = (l: number): number => l * FLOOR;
   const centerOf = new Map<string, THREE.Vector3>();
+
+  // District platforms (one per crate, at its dependency-layer elevation).
   for (const c of scene.crates) {
-    const geo = new THREE.BoxGeometry(c.w * S, 1.2, c.h * S);
-    const color = hexToColor(crateColor(c.name, scene.crateNames));
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6, metalness: 0.1, transparent: true, opacity: 0.92 });
+    const geo = new THREE.BoxGeometry(c.w * S, 0.6, c.h * S);
+    // Solid, dark crate-tinted ground tile so it catches the towers' shadows.
+    const color = hexToColor(crateColor(c.name, scene.crateNames)).multiplyScalar(0.4);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.95, metalness: 0 });
     const mesh = new THREE.Mesh(geo, mat);
     const cx = (c.x + c.w / 2) * S;
     const cz = (c.y + c.h / 2) * S;
-    const y = c.layer * FLOOR;
+    const y = layerY(c.layer);
     mesh.position.set(cx, y, cz);
+    mesh.receiveShadow = true;
     mesh.userData.id = c.name;
     root.add(mesh);
     centerOf.set(c.name, new THREE.Vector3(cx, y, cz));
     const label = makeLabel(`${c.name} ·L${c.layer}`, "three-label");
-    label.position.set(cx, y + 1.5, cz);
+    label.position.set(cx, y + MAX_BUILDING + 2, cz);
     root.add(label);
   }
 
+  // Buildings (one per type / module-fn box), standing on their district floor.
+  for (const b of scene.boxes) {
+    const members = b.fields.length + b.variants.length + b.ops.length;
+    // Taller-than-wide so even average types read as blocks, not tiles.
+    const height = Math.min(MAX_BUILDING, 1.8 + members * 0.5);
+    const side = Math.max(b.w * S * 0.5, 1.0);
+    const geo = new THREE.BoxGeometry(side, height, side);
+    const color = hexToColor(crateColor(b.crate, scene.crateNames));
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.48, metalness: 0.14 });
+    const mesh = new THREE.Mesh(geo, mat);
+    const cx = (b.x + b.w / 2) * S;
+    const cz = (b.y + b.h / 2) * S;
+    mesh.position.set(cx, layerY(b.layer) + 0.3 + height / 2, cz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData.id = b.id;
+    root.add(mesh);
+  }
+
+  // Crate dependency edges (district to district).
   for (const e of scene.crateEdges) {
     const a = centerOf.get(e.source);
     const b = centerOf.get(e.target);
     if (!a || !b) continue;
     const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const mat = new THREE.LineBasicMaterial({ color: e.mutual ? 0xff2d55 : 0x6b7a93, transparent: true, opacity: 0.6 });
+    const mat = new THREE.LineBasicMaterial({ color: e.mutual ? 0xff2d55 : 0x6b7a93, transparent: true, opacity: 0.5 });
     root.add(new THREE.Line(geo, mat));
   }
 }
