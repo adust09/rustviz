@@ -61,7 +61,8 @@ export function Controls(props: ControlsProps): JSX.Element {
           ))}
         </div>
 
-        {!isMap && (
+        {/* Render styles apply to the sequence view; structure is 3D-only. */}
+        {viewMode === "sequence" && (
           <div className="seg" role="group" aria-label="render style" title="Render style">
             {RENDER_STYLES.map((r) => (
               <button
@@ -125,7 +126,7 @@ export function Controls(props: ControlsProps): JSX.Element {
         )}
         {meta && !isMap && (
           <div className="meta">
-            {viewMode} · {renderStyle} · {meta.crate_count} crates · {meta.total_loc} LOC
+            {viewMode} · {viewMode === "structure" ? "3d" : renderStyle} · {meta.crate_count} crates · {meta.total_loc} LOC
           </div>
         )}
         {hasLens && isMap && (

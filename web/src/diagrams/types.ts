@@ -49,10 +49,6 @@ export interface StructureEdge {
   kind: "impls" | "calls";
 }
 
-/** Level of detail, driven by zoom: 0 = crates only, 1 = + module frames &
- *  type titles, 2 = + members (full UML boxes). */
-export type Lod = 0 | 1 | 2;
-
 /** A module sub-frame inside a crate region (absolute world coords). */
 export interface ModuleFrame {
   id: string;

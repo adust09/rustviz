@@ -508,14 +508,8 @@ body,
   white-space: pre;
 }
 
-/* --- Flat / shared diagram SVG text --- */
-.diag-scroll {
-  position: absolute;
-  inset: 0;
-  overflow: auto;
-}
-/* Pan/zoom surface (flat + iso). The svg fills the container; navigation is
-   wheel-zoom + drag-pan, so no scrollbars. */
+/* Pan/zoom surface. The svg fills the container; navigation is wheel-zoom +
+   drag-pan, so no scrollbars. */
 .diag-zoom {
   position: absolute;
   inset: 0;
@@ -549,33 +543,8 @@ body,
   background: #243049;
   color: #eef2f8;
 }
-.diag-crate {
-  font: 700 13px ui-sans-serif, system-ui, sans-serif;
-  fill: #c7d0dd;
-}
-.diag-tag {
-  font: 9px ui-monospace, Menlo, monospace;
-  opacity: 0.85;
-}
-.diag-title {
-  font: 700 11px ui-monospace, "SF Mono", Menlo, monospace;
-}
-.diag-attr {
-  font: 10.5px ui-monospace, Menlo, monospace;
-  fill: #aeb9c9;
-}
-.diag-op {
-  font: 10.5px ui-monospace, Menlo, monospace;
-  fill: #d6deea;
-  cursor: pointer;
-}
-.diag-op:hover {
-  fill: #ffd23f;
-}
-.diag-more {
-  font: 9.5px ui-monospace, Menlo, monospace;
-  fill: #6b7891;
-}
+
+/* Sequence diagram text. */
 .diag-life {
   font: 600 11px ui-monospace, Menlo, monospace;
   fill: #dbe3ee;
@@ -589,57 +558,6 @@ body,
   font: 13px ui-monospace, Menlo, monospace;
   fill: #6b7891;
 }
-.diag-mod {
-  font: 600 11px ui-monospace, Menlo, monospace;
-  fill: #8595ab;
-}
-
-/* Non-scaling map labels: constant on-screen size, JS-positioned at world pts. */
-.zoom-labels {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 2;
-}
-.zoom-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  white-space: nowrap;
-  font: 700 12px ui-monospace, "SF Mono", Menlo, monospace;
-  color: #eef2f8;
-  background: #0b0f17b3;
-  border: 1px solid #2a3342;
-  border-radius: 5px;
-  padding: 1px 6px;
-  text-shadow: 0 1px 2px #000;
-  will-change: transform;
-}
-.diag-layer {
-  font: 700 11px ui-sans-serif, system-ui, sans-serif;
-  fill: #6b7891;
-}
-
-/* Minimap: world skeleton + live viewport rectangle (orientation aid). */
-.minimap {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  background: #0b0f17cc;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px;
-  backdrop-filter: blur(3px);
-  cursor: crosshair;
-  z-index: 3;
-}
-.minimap-vp {
-  fill: #ffffff1f;
-  stroke: #eef2f8;
-  stroke-width: 1.5;
-  vector-effect: non-scaling-stroke;
-}
 
 /* Iso sequence: tilt the flat temporal plane back into 3D for depth. Only the
    svg tilts — the zoom controls stay flat and usable. */
@@ -648,7 +566,7 @@ body,
   inset: 0;
   perspective: 1400px;
 }
-.iso-tilt .diag-zoom > svg:not(.minimap) {
+.iso-tilt .diag-zoom > svg {
   transform: rotateX(30deg);
   transform-origin: top center;
 }
@@ -671,10 +589,4 @@ body,
   padding: 1px 5px;
   white-space: nowrap;
   pointer-events: none;
-}
-.three-crate-label {
-  font-weight: 700;
-  color: #c7d0dd;
-  background: transparent;
-  border: 0;
 }

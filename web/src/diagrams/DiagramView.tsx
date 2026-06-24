@@ -47,20 +47,24 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
   }, [open]);
 
   const onOpenSource = (file: string, start: number, end: number): void => setOpen({ file, start, end });
+  const common = { scene, selectedId, onSelect: setSelectedId, onOpenSource, onDrillToSequence };
+
+  // Structure is 3D-only; the flat / isometric styles apply to the sequence view.
+  const three = (
+    <Suspense fallback={<div className="diagram-placeholder"><p>loading 3D…</p></div>}>
+      <ThreeRenderer {...common} />
+    </Suspense>
+  );
+  const body =
+    diagramType === "structure" || renderStyle === "3d"
+      ? three
+      : renderStyle === "iso"
+        ? <IsometricRenderer {...common} />
+        : <LayeredRenderer {...common} />;
 
   return (
     <div className="diagram-wrap">
-      {renderStyle === "flat" && (
-        <LayeredRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
-      )}
-      {renderStyle === "iso" && (
-        <IsometricRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
-      )}
-      {renderStyle === "3d" && (
-        <Suspense fallback={<div className="diagram-placeholder"><p>loading 3D…</p></div>}>
-          <ThreeRenderer scene={scene} selectedId={selectedId} onSelect={setSelectedId} onOpenSource={onOpenSource} onDrillToSequence={onDrillToSequence} />
-        </Suspense>
-      )}
+      {body}
       {open && (
         <div className="diagram-source">
           <div className="source-head">

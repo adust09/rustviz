@@ -1,17 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useContainerSize } from "./useSize";
 
-// Pan + wheel-zoom wrapper for the SVG diagram renderers (flat / iso), giving
-// them the same zoom/pan affordance as the three.js view, plus:
-//   - semantic level-of-detail (LoD): `render(lod)` is re-evaluated only when the
-//     zoom scale crosses a threshold, so detail appears/disappears as you zoom
-//     while continuous pan/zoom stays imperative (no per-frame React re-render).
-//   - an optional minimap (world skeleton + a live viewport rectangle) for
-//     "where am I" orientation on a large, stable map.
+// Pan + wheel-zoom wrapper for the SVG diagram renderers, giving them the same
+// navigation as the three.js view. The transform is applied imperatively to the
+// inner <g> so panning/zooming never re-renders the child nodes.
 
 const MIN = 0.02;
 const MAX = 14;
-const MINIMAP_MAX = 190;
 const clamp = (v: number): number => Math.min(MAX, Math.max(MIN, v));
 
 interface View {
@@ -20,84 +15,25 @@ interface View {
   ty: number;
 }
 
-/** A label that stays a constant on-screen size (like a map label) regardless
- *  of zoom, positioned at a world coordinate. */
-export interface WorldLabel {
-  x: number;
-  y: number;
-  text: string;
-}
-
 interface ZoomPanSvgProps {
   contentW: number;
   contentH: number;
   defs?: React.ReactNode;
-  /** Ascending scale breakpoints; lod = how many have been passed. */
-  lodThresholds?: number[];
-  /** World-coordinate skeleton drawn in the minimap (optional). */
-  minimap?: React.ReactNode;
-  /** Non-scaling overlay labels anchored at world coords (optional). */
-  labels?: WorldLabel[];
-  /** Static content (when LoD is not used). */
-  children?: React.ReactNode;
-  /** LoD content; receives the current level. Takes precedence over children. */
-  render?: (lod: number) => React.ReactNode;
+  children: React.ReactNode;
 }
 
-function lodFor(scale: number, thresholds?: number[]): number {
-  if (!thresholds) return 0;
-  let n = 0;
-  for (const t of thresholds) if (scale >= t) n++;
-  return n;
-}
-
-export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
-  const { contentW, contentH, defs, lodThresholds, minimap, labels, children, render } = props;
+export function ZoomPanSvg({ contentW, contentH, defs, children }: ZoomPanSvgProps): JSX.Element {
   const [ref, size] = useContainerSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
   const gRef = useRef<SVGGElement>(null);
-  const vpRef = useRef<SVGRectElement>(null);
-  const labelsRef = useRef<HTMLDivElement>(null);
-  const labelData = useRef<WorldLabel[]>(labels ?? []);
-  labelData.current = labels ?? [];
   const view = useRef<View>({ scale: 1, tx: 0, ty: 0 });
   const drag = useRef<{ x: number; y: number; active: boolean } | null>(null);
   const interacted = useRef(false);
   const lastKey = useRef("");
-  const [lod, setLod] = useState(0);
-
-  const mmScale = minimap ? Math.min(MINIMAP_MAX / contentW, MINIMAP_MAX / contentH) : 0;
-  const mmW = contentW * mmScale;
-  const mmH = contentH * mmScale;
 
   const apply = (): void => {
     const v = view.current;
     gRef.current?.setAttribute("transform", `translate(${v.tx} ${v.ty}) scale(${v.scale})`);
-    if (vpRef.current) {
-      vpRef.current.setAttribute("x", String(-v.tx / v.scale));
-      vpRef.current.setAttribute("y", String(-v.ty / v.scale));
-      vpRef.current.setAttribute("width", String(size.w / v.scale));
-      vpRef.current.setAttribute("height", String(size.h / v.scale));
-    }
-    const box = labelsRef.current;
-    if (box) {
-      const kids = box.children;
-      for (let i = 0; i < kids.length; i++) {
-        const l = labelData.current[i];
-        const el = kids[i] as HTMLElement;
-        if (!l) continue;
-        const sx = l.x * v.scale + v.tx;
-        const sy = l.y * v.scale + v.ty;
-        const vis = sx > -120 && sx < size.w + 120 && sy > -40 && sy < size.h + 40;
-        el.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -50%)`;
-        el.style.opacity = vis ? "1" : "0";
-      }
-    }
-  };
-
-  const syncLod = (): void => {
-    const next = lodFor(view.current.scale, lodThresholds);
-    setLod((prev) => (prev === next ? prev : next));
   };
 
   const fit = (): void => {
@@ -105,7 +41,6 @@ export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
     const s = clamp(Math.min(size.w / contentW, size.h / contentH) * 0.92);
     view.current = { scale: s, tx: (size.w - contentW * s) / 2, ty: Math.max(14, (size.h - contentH * s) / 2) };
     apply();
-    syncLod();
   };
 
   const zoomAt = (cx: number, cy: number, factor: number): void => {
@@ -114,15 +49,6 @@ export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
     v.tx = cx - ((cx - v.tx) / v.scale) * ns;
     v.ty = cy - ((cy - v.ty) / v.scale) * ns;
     v.scale = ns;
-    interacted.current = true;
-    apply();
-    syncLod();
-  };
-
-  const centerOnWorld = (wx: number, wy: number): void => {
-    const v = view.current;
-    v.tx = size.w / 2 - wx * v.scale;
-    v.ty = size.h / 2 - wy * v.scale;
     interacted.current = true;
     apply();
   };
@@ -179,12 +105,6 @@ export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
     drag.current = null;
   };
 
-  const onMinimap = (e: React.PointerEvent): void => {
-    if (e.buttons !== 1) return;
-    const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
-    centerOnWorld((e.clientX - rect.left) / mmScale, (e.clientY - rect.top) / mmScale);
-  };
-
   return (
     <div ref={ref} className="diag-zoom">
       <svg
@@ -199,31 +119,8 @@ export function ZoomPanSvg(props: ZoomPanSvgProps): JSX.Element {
         onPointerLeave={endPan}
       >
         <defs>{defs}</defs>
-        <g ref={gRef}>{render ? render(lod) : children}</g>
+        <g ref={gRef}>{children}</g>
       </svg>
-
-      {labels && (
-        <div className="zoom-labels" ref={labelsRef}>
-          {labels.map((l, i) => (
-            <div className="zoom-label" key={i}>{l.text}</div>
-          ))}
-        </div>
-      )}
-
-      {minimap && (
-        <svg
-          className="minimap"
-          width={mmW}
-          height={mmH}
-          viewBox={`0 0 ${contentW} ${contentH}`}
-          onPointerDown={onMinimap}
-          onPointerMove={onMinimap}
-        >
-          {minimap}
-          <rect ref={vpRef} className="minimap-vp" x={0} y={0} width={contentW} height={contentH} />
-        </svg>
-      )}
-
       <div className="zoom-ctl">
         <button onClick={() => zoomAt(size.w / 2, size.h / 2, 1.3)} title="Zoom in">＋</button>
         <button onClick={() => zoomAt(size.w / 2, size.h / 2, 1 / 1.3)} title="Zoom out">－</button>
