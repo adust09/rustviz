@@ -23,13 +23,14 @@ const BAND_GAP = 90;
 const TYPE_KINDS = new Set<GraphNode["kind"]>(["struct", "enum", "trait"]);
 
 // Roles inferred from kind + naming pattern, ordered left→right along X.
-const ROLES = [
-  { key: "interface", title: "Interface" },
-  { key: "service", title: "Service" },
-  { key: "persistence", title: "Persistence" },
-  { key: "data", title: "Data" },
-  { key: "aux", title: "Config / Error" },
-  { key: "procedure", title: "Procedure" },
+// `hint` documents the classification rule (shown in the legend).
+export const ROLES = [
+  { key: "interface", title: "Interface", hint: "traits" },
+  { key: "service", title: "Service", hint: "*Server / Handler / Manager / Client …" },
+  { key: "persistence", title: "Persistence", hint: "*Store / Buffer / Table / Repository …" },
+  { key: "data", title: "Data", hint: "other struct / enum" },
+  { key: "aux", title: "Config / Error", hint: "*Config / *Error / *Options …" },
+  { key: "procedure", title: "Procedure", hint: "module-level functions" },
 ] as const;
 const ROLE_INDEX = new Map<string, number>(ROLES.map((r, i) => [r.key, i]));
 

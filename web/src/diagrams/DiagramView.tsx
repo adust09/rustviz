@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { fetchSource } from "../api";
 import type { Graph } from "../schema";
-import { buildStructureScene } from "./structureScene";
+import { ROLES, buildStructureScene } from "./structureScene";
 import { buildSequenceScene } from "./sequenceScene";
 import { LayeredRenderer } from "./LayeredRenderer";
 import { IsometricRenderer } from "./IsometricRenderer";
@@ -78,6 +78,7 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
   return (
     <div className="diagram-wrap">
       {body}
+      {scene.kind === "structure" && <StructureLegend present={new Set(scene.regions.map((r) => r.title))} />}
       <DetailPanel box={detail.box} crate={detail.crate} onClose={() => setSelectedId(null)} onOpenSource={onOpenSource} />
       {open && (
         <div className="diagram-source">
@@ -88,6 +89,33 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
             </button>
           </div>
           <pre>{source || "loading…"}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Explains how to read the 3D city: what the role zones (X) classify, and what
+// the other channels (elevation / height / colour) encode.
+function StructureLegend({ present }: { present: Set<string> }): JSX.Element {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={`legend ${open ? "open" : ""}`}>
+      <button className="legend-h" onClick={() => setOpen((v) => !v)}>
+        how to read {open ? "▾" : "▸"}
+      </button>
+      {open && (
+        <div className="legend-body">
+          <div className="legend-axis">Zones (left → right) = type role</div>
+          {ROLES.filter((r) => present.has(r.title)).map((r) => (
+            <div key={r.key} className="legend-zone">
+              <b>{r.title}</b> — {r.hint}
+            </div>
+          ))}
+          <div className="legend-axis">Other channels</div>
+          <div className="legend-zone">elevation = dependency layer (foundation → top)</div>
+          <div className="legend-zone">building height = member count</div>
+          <div className="legend-zone">colour = crate · click a building for details</div>
         </div>
       )}
     </div>
