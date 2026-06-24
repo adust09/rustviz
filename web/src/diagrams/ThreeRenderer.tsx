@@ -177,23 +177,41 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     frameCamera(ctx);
   }, [props.scene]);
 
-  // Highlight the focused building (emissive) + the wires of its crate, without
-  // a rebuild. Outgoing deps glow warm, incoming (used-by) cyan, cycles red.
+  // On selection: glow the picked building blue, glow the buildings of related
+  // crates (depends-on warm, used-by cyan, cycle red), and show that crate's
+  // wires. No rebuild — just material + visibility tweaks.
   useEffect(() => {
     const ctx = ctxRef.current;
     if (!ctx) return;
-    for (const [id, mesh] of ctx.picks) {
-      const mat = mesh.material as THREE.MeshStandardMaterial;
-      const on = id === props.selectedId;
-      mat.emissive.setHex(on ? 0x3b6cff : 0x000000);
-      mat.emissiveIntensity = on ? 0.55 : 0;
+    const sc = props.scene;
+
+    let focus: string | null = null;
+    const crateRel = new Map<string, number>();
+    const crateOfBox = new Map<string, string>();
+    if (sc.kind === "structure") {
+      for (const b of sc.boxes) crateOfBox.set(b.id, b.crate);
+      if (props.selectedId) {
+        const b = sc.boxes.find((x) => x.id === props.selectedId);
+        focus = b ? b.crate : sc.crates.some((c) => c.name === props.selectedId) ? props.selectedId : null;
+      }
+      if (focus) {
+        for (const e of sc.crateEdges) {
+          if (e.source === focus) crateRel.set(e.target, e.mutual ? WIRE_CYCLE : WIRE_OUT);
+          else if (e.target === focus) crateRel.set(e.source, e.mutual ? WIRE_CYCLE : WIRE_IN);
+        }
+      }
     }
 
-    const sc = props.scene;
-    let focus: string | null = null;
-    if (sc.kind === "structure" && props.selectedId) {
-      const b = sc.boxes.find((x) => x.id === props.selectedId);
-      focus = b ? b.crate : sc.crates.some((c) => c.name === props.selectedId) ? props.selectedId : null;
+    for (const [id, mesh] of ctx.picks) {
+      const mat = mesh.material as THREE.MeshStandardMaterial;
+      if (id === props.selectedId) {
+        mat.emissive.setHex(0x3b6cff);
+        mat.emissiveIntensity = 0.6;
+        continue;
+      }
+      const rel = crateRel.get(crateOfBox.get(id) ?? "");
+      mat.emissive.setHex(rel ?? 0x000000);
+      mat.emissiveIntensity = rel !== undefined ? 0.45 : 0;
     }
     for (const wire of ctx.wires) styleWire(wire, focus);
   }, [props.selectedId, props.scene]);
@@ -349,9 +367,15 @@ function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<str
     const a = anchor.get(e.source)?.v;
     const b = anchor.get(e.target)?.v;
     if (!a || !b) continue;
-    const geo = new THREE.BufferGeometry().setFromPoints([a, b]);
-    const mat = new THREE.LineBasicMaterial({ color: WIRE_IDLE, transparent: true, opacity: 0.9 });
+    // Arc the wire above the city and draw it on top (depthTest off) so it is
+    // never buried among the towers.
+    const mid = new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5);
+    mid.y = Math.max(a.y, b.y) + 12;
+    const pts = new THREE.QuadraticBezierCurve3(a, mid, b).getPoints(24);
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: WIRE_IDLE, transparent: true, opacity: 0.95, depthTest: false });
     const line = new THREE.Line(geo, mat);
+    line.renderOrder = 10;
     line.visible = false;
     root.add(line);
     wires.push({ line, source: e.source, target: e.target, mutual: e.mutual });
