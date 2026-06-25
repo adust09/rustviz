@@ -12,6 +12,16 @@ export async function runTests(): Promise<TestRun> {
   return TestRun.parse(await res.json());
 }
 
+/** Get the last cached test run without running anything (null if none yet). */
+export async function getCachedTests(): Promise<TestRun | null> {
+  const res = await fetch("/api/tests");
+  if (!res.ok) {
+    throw new Error(`tests cache failed: ${res.status}`);
+  }
+  const json = await res.json();
+  return json === null ? null : TestRun.parse(json);
+}
+
 export async function fetchGraph(path?: string): Promise<Graph> {
   const res = await fetch("/api/analyze", {
     method: "POST",

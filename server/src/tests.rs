@@ -10,7 +10,7 @@ use serde::Serialize;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-const TIMEOUT: Duration = Duration::from_secs(600);
+const TIMEOUT: Duration = Duration::from_secs(1800);
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -94,17 +94,55 @@ pub async fn run(root: &Path) -> TestRun {
         .current_dir(root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        // Own process group so a timeout / client reload can kill the whole
+        // sh→cargo→rustc tree, not just the sh wrapper.
+        .process_group(0)
         .spawn();
 
     let child = match child {
         Ok(c) => c,
         Err(e) => return failed_run(format!("failed to launch cargo test: {e}")),
     };
+    let pid = child.id();
 
-    match timeout(TIMEOUT, child.wait_with_output()).await {
-        Err(_) => failed_run(format!("test run timed out after {}s", TIMEOUT.as_secs())),
-        Ok(Err(e)) => failed_run(format!("cargo test did not complete: {e}")),
+    // Armed guard: if the request future is dropped while awaiting (client
+    // reloaded), kill the whole process group on the way out.
+    let mut guard = Guard { pid, armed: true };
+    let out = timeout(TIMEOUT, child.wait_with_output()).await;
+    guard.armed = false; // got past the await; clean up explicitly below
+
+    match out {
+        Err(_) => {
+            kill_group(pid);
+            failed_run(format!("test run timed out after {}s", TIMEOUT.as_secs()))
+        }
+        Ok(Err(e)) => {
+            kill_group(pid);
+            failed_run(format!("cargo test did not complete: {e}"))
+        }
         Ok(Ok(out)) => parse(&String::from_utf8_lossy(&out.stdout)),
+    }
+}
+
+/// SIGKILL the whole process group (`kill -9 -<pgid>`); the child was spawned
+/// with `process_group(0)` so its pid is the group id.
+fn kill_group(pid: Option<u32>) {
+    if let Some(p) = pid {
+        let _ = std::process::Command::new("kill").arg("-9").arg(format!("-{p}")).status();
+    }
+}
+
+struct Guard {
+    pid: Option<u32>,
+    armed: bool,
+}
+
+impl Drop for Guard {
+    fn drop(&mut self) {
+        if self.armed {
+            kill_group(self.pid);
+        }
     }
 }
 

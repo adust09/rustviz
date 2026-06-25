@@ -7,7 +7,7 @@ import { DiagramView } from "./diagrams/DiagramView";
 import { TestView } from "./TestView";
 import { aggregate, type Tile } from "./aggregate";
 import { LENSES, type Graph, type Lens } from "./schema";
-import { runTests } from "./api";
+import { getCachedTests, runTests } from "./api";
 import type { TestRun } from "./testRun";
 import type { ViewMode } from "./diagrams/types";
 
@@ -36,6 +36,7 @@ export function App(): JSX.Element {
     setViewMode("sequence");
   };
 
+  // Explicit run (the re-run button) — always runs cargo test.
   const onRunTests = (): void => {
     setTestLoading(true);
     setTestError(null);
@@ -45,9 +46,17 @@ export function App(): JSX.Element {
       .finally(() => setTestLoading(false));
   };
 
-  // Auto-run once on first opening the Test tab.
+  // On opening the Test tab: show the server's cached results if any (so a
+  // reload doesn't re-run); only run when there's nothing cached yet.
   useEffect(() => {
-    if (viewMode === "test" && !testRun && !testLoading && !testError) onRunTests();
+    if (viewMode !== "test" || testRun || testLoading) return;
+    setTestLoading(true);
+    setTestError(null);
+    getCachedTests()
+      .then((cached) => cached ?? runTests())
+      .then(setTestRun)
+      .catch((e: unknown) => setTestError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setTestLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]);
 
