@@ -1,23 +1,60 @@
-import { useState } from "react";
-import type { Suite, TestKind, TestRun } from "./testRun";
+import { useMemo, useState } from "react";
+import type { Graph } from "./schema";
+import type { Suite, TestCase, TestRun } from "./testRun";
 
 interface TestViewProps {
   run: TestRun | null;
   loading: boolean;
   error: string | null;
   onRun: () => void;
+  /** Graph supplies each test fn's doc comment (the "intent"). */
+  graph: Graph | null;
 }
 
-const KIND_ORDER: TestKind[] = ["unit", "integration", "doc"];
-const KIND_LABEL: Record<TestKind, string> = {
-  unit: "Unit tests",
-  integration: "Integration / E2E",
-  doc: "Doc-tests",
-};
+interface Row {
+  suite: Suite;
+  test: TestCase;
+  intent: string;
+  documented: boolean;
+}
 
-export function TestView({ run, loading, error, onRun }: TestViewProps): JSX.Element {
+/** A test's last path segment, prettified — the fallback intent when undocumented. */
+function humanize(name: string): string {
+  const last = name.split("::").pop() ?? name;
+  return last.replace(/_/g, " ");
+}
+
+const KIND_LABEL: Record<Suite["kind"], string> = { unit: "unit", integration: "e2e", doc: "doc" };
+
+export function TestView({ run, loading, error, onRun, graph }: TestViewProps): JSX.Element {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [failsOnly, setFailsOnly] = useState(false);
+
+  // Map "<crate_underscored>::<module::path::name>" → doc comment, to look up a
+  // test's documented intent. Test names from cargo are crate-relative; graph
+  // ids are crate-qualified with the package (dashed) name.
+  const docByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    if (!graph) return m;
+    for (const n of graph.nodes) {
+      if (n.kind !== "fn" || !n.doc) continue;
+      const rel = n.id.startsWith(`${n.crate}::`) ? n.id.slice(n.crate.length + 2) : n.id;
+      m.set(`${n.crate.replaceAll("-", "_")}::${rel}`, n.doc);
+    }
+    return m;
+  }, [graph]);
+
+  const rows: Row[] = useMemo(() => {
+    if (!run) return [];
+    const out: Row[] = [];
+    for (const suite of run.suites) {
+      for (const test of suite.tests) {
+        const doc = docByKey.get(`${suite.crate}::${test.name}`);
+        out.push({ suite, test, intent: doc ?? humanize(test.name), documented: !!doc });
+      }
+    }
+    return failsOnly ? out.filter((r) => r.test.status === "failed") : out;
+  }, [run, docByKey, failsOnly]);
 
   const toggle = (id: string): void =>
     setExpanded((prev) => {
@@ -56,55 +93,54 @@ export function TestView({ run, loading, error, onRun }: TestViewProps): JSX.Ele
             <pre>{run.error}</pre>
           </div>
         )}
-        {!loading && !error && run && !run.error && run.suites.length === 0 && <div className="test-msg">no tests found.</div>}
-        {!loading && !error && run && !run.error &&
-          KIND_ORDER.filter((k) => run.suites.some((s) => s.kind === k)).map((kind) => (
-            <KindSection key={kind} kind={kind} suites={run.suites.filter((s) => s.kind === kind)} failsOnly={failsOnly} expanded={expanded} onToggle={toggle} />
-          ))}
+        {!loading && !error && run && !run.error && rows.length === 0 && <div className="test-msg">no tests.</div>}
+        {!loading && !error && run && !run.error && rows.length > 0 && (
+          <table className="test-table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>test</th>
+                <th>intent (what it verifies)</th>
+                <th>kind</th>
+                <th>crate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const id = `${r.suite.name}:${r.test.name}`;
+                const open = expanded.has(id);
+                const clickable = r.test.status === "failed" && !!r.test.message;
+                return <TestRow key={id} row={r} id={id} open={open} clickable={clickable} onToggle={toggle} />;
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );
 }
 
-function KindSection(props: { kind: TestKind; suites: Suite[]; failsOnly: boolean; expanded: Set<string>; onToggle: (id: string) => void }): JSX.Element {
-  const { kind, suites, failsOnly, expanded, onToggle } = props;
-  const passed = suites.reduce((n, s) => n + s.passed, 0);
-  const failed = suites.reduce((n, s) => n + s.failed, 0);
+function TestRow(props: { row: Row; id: string; open: boolean; clickable: boolean; onToggle: (id: string) => void }): JSX.Element {
+  const { row, id, open, clickable, onToggle } = props;
+  const { suite, test, intent, documented } = row;
   return (
-    <div className="test-kind">
-      <div className="test-kind-h">
-        {KIND_LABEL[kind]} <span className="test-kind-sub">{passed} passed{failed > 0 ? ` · ${failed} failed` : ""}</span>
-      </div>
-      {suites.map((s) => {
-        const tests = failsOnly ? s.tests.filter((t) => t.status === "failed") : s.tests;
-        if (failsOnly && tests.length === 0) return null;
-        return (
-          <div key={`${s.kind}:${s.name}:${s.crate}`} className="test-suite">
-            <div className="test-suite-h">
-              <span className="test-suite-name">{s.name}</span>
-              <span className="test-suite-crate">{s.crate}</span>
-              <span className="test-suite-counts">
-                {s.passed}p {s.failed > 0 && <b className="fail">{s.failed}f</b>} {s.ignored > 0 ? `${s.ignored}i` : ""} · {(s.duration_ms / 1000).toFixed(2)}s
-              </span>
-            </div>
-            {tests.map((t) => {
-              const id = `${s.name}:${t.name}`;
-              const open = expanded.has(id);
-              const clickable = t.status === "failed" && t.message;
-              return (
-                <div key={id} className="test-case-wrap">
-                  <div className={`test-case ${t.status} ${clickable ? "clickable" : ""}`} onClick={() => clickable && onToggle(id)}>
-                    <span className={`test-dot ${t.status}`} />
-                    <span className="test-case-name">{t.name}</span>
-                    {clickable && <span className="test-case-x">{open ? "▾" : "▸"}</span>}
-                  </div>
-                  {open && t.message && <pre className="test-case-msg">{t.message}</pre>}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
-    </div>
+    <>
+      <tr className={`test-row ${test.status} ${clickable ? "clickable" : ""}`} onClick={() => clickable && onToggle(id)}>
+        <td className="test-td-status"><span className={`test-dot ${test.status}`} /></td>
+        <td className="test-td-name" title={test.name}>
+          {test.name.split("::").pop()}
+          {clickable && <span className="test-row-x">{open ? " ▾" : " ▸"}</span>}
+        </td>
+        <td className={`test-td-intent ${documented ? "doc" : "name"}`}>{intent}</td>
+        <td className="test-td-kind">{KIND_LABEL[suite.kind]}</td>
+        <td className="test-td-crate">{suite.crate}</td>
+      </tr>
+      {open && test.message && (
+        <tr className="test-row-detail">
+          <td></td>
+          <td colSpan={4}><pre className="test-case-msg">{test.message}</pre></td>
+        </tr>
+      )}
+    </>
   );
 }

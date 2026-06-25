@@ -105,6 +105,7 @@ export const GraphNode = z.object({
   signature: FnSignature.optional(),
   fields: z.array(FieldDef).optional(),
   variants: z.array(VariantDef).optional(),
+  doc: z.string().optional(),
 });
 export type GraphNode = z.infer<typeof GraphNode>;
 

@@ -68,7 +68,7 @@ impl Collected {
                 syn::Item::Mod(m) => self.handle_mod(krate, module_id, file, m),
                 syn::Item::Fn(f) => {
                     let id = format!("{module_id}::{}", f.sig.ident);
-                    self.add_fn(krate, module_id, module_id, file, &id, &f.sig.ident.to_string(), item.span(), Some(&f.block), Some(&f.sig), convert_vis(&f.vis));
+                    self.add_fn(krate, module_id, module_id, file, &id, &f.sig.ident.to_string(), item.span(), Some(&f.block), Some(&f.sig), convert_vis(&f.vis), doc_of(&f.attrs));
                 }
                 syn::Item::Struct(s) => self.add_struct(krate, module_id, file, s, item.span()),
                 syn::Item::Enum(e) => self.add_enum(krate, module_id, file, e, item.span()),
@@ -94,7 +94,7 @@ impl Collected {
             if let syn::TraitItem::Fn(m) = ti {
                 let id = format!("{trait_id}::{}", m.sig.ident);
                 // Trait items have no own visibility; they follow the trait's.
-                self.add_fn(krate, module_id, &trait_id, file, &id, &m.sig.ident.to_string(), m.span(), m.default.as_ref(), Some(&m.sig), convert_vis(&t.vis));
+                self.add_fn(krate, module_id, &trait_id, file, &id, &m.sig.ident.to_string(), m.span(), m.default.as_ref(), Some(&m.sig), convert_vis(&t.vis), doc_of(&m.attrs));
             }
         }
     }
@@ -116,7 +116,7 @@ impl Collected {
         for ii in &i.items {
             if let syn::ImplItem::Fn(m) = ii {
                 let id = format!("{type_id}::{}", m.sig.ident);
-                self.add_fn(krate, module_id, &type_id, file, &id, &m.sig.ident.to_string(), m.span(), Some(&m.block), Some(&m.sig), convert_vis(&m.vis));
+                self.add_fn(krate, module_id, &type_id, file, &id, &m.sig.ident.to_string(), m.span(), Some(&m.block), Some(&m.sig), convert_vis(&m.vis), doc_of(&m.attrs));
             }
         }
     }
@@ -138,7 +138,8 @@ impl Collected {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn add_fn(&mut self, krate: &str, module_id: &str, parent: &str, file: &str, id: &str, name: &str, span: proc_macro2::Span, block: Option<&syn::Block>, sig: Option<&syn::Signature>, vis: Visibility) {
+    #[allow(clippy::too_many_arguments)]
+    fn add_fn(&mut self, krate: &str, module_id: &str, parent: &str, file: &str, id: &str, name: &str, span: proc_macro2::Span, block: Option<&syn::Block>, sig: Option<&syn::Signature>, vis: Visibility, doc: Option<String>) {
         let mut metrics = Metrics::default();
         if let Some(block) = block {
             let raw = RawFn::collect(name, block);
@@ -151,6 +152,7 @@ impl Collected {
         let mut node = make_node(id, name, NodeKind::Fn, krate, module_id, parent, file, span, metrics);
         node.visibility = vis;
         node.signature = sig.map(build_signature);
+        node.doc = doc;
         self.insert(node);
     }
 
@@ -186,6 +188,7 @@ impl Collected {
                 signature: None,
                 fields: None,
                 variants: None,
+                doc: None,
             });
         }
     }
@@ -213,6 +216,27 @@ fn make_node(id: &str, name: &str, kind: NodeKind, krate: &str, module: &str, pa
         signature: None,
         fields: None,
         variants: None,
+        doc: None,
+    }
+}
+
+/// Concatenate the `///` doc-comment lines of an item into one trimmed string.
+fn doc_of(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident("doc") {
+            continue;
+        }
+        if let syn::Meta::NameValue(nv) = &attr.meta {
+            if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. }) = &nv.value {
+                lines.push(s.value().trim().to_string());
+            }
+        }
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join(" ").trim().to_string())
     }
 }
 

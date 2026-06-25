@@ -977,6 +977,70 @@ body,
   overflow: auto;
 }
 
+/* Test table: one row per test, with its documented intent. */
+.test-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 11.5px ui-monospace, Menlo, monospace;
+}
+.test-table thead th {
+  position: sticky;
+  top: 0;
+  background: #0b0f17;
+  text-align: left;
+  font: 700 10px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7891;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  z-index: 1;
+}
+.test-row td {
+  padding: 4px 8px;
+  border-bottom: 1px solid #141a24;
+  vertical-align: top;
+}
+.test-row.clickable {
+  cursor: pointer;
+}
+.test-row.clickable:hover td {
+  background: #131a26;
+}
+.test-td-status {
+  width: 14px;
+}
+.test-td-name {
+  color: #d6deea;
+  white-space: nowrap;
+}
+.test-row.failed .test-td-name {
+  color: #ff8b9b;
+}
+.test-row-x {
+  color: #6b7891;
+}
+.test-td-intent {
+  width: 55%;
+}
+.test-td-intent.doc {
+  color: #c6d0dd;
+}
+.test-td-intent.name {
+  color: #7e8aa0;
+  font-style: italic;
+}
+.test-td-kind {
+  color: #8595ab;
+}
+.test-td-crate {
+  color: #6b7891;
+  white-space: nowrap;
+}
+.test-row-detail td {
+  border-bottom: 1px solid #141a24;
+}
+
 /* --- three.js 3D --- */
 .three-mount {
   position: absolute;

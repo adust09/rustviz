@@ -116,7 +116,7 @@ export function App(): JSX.Element {
         />
       )}
 
-      {viewMode === "test" && <TestView run={testRun} loading={testLoading} error={testError} onRun={onRunTests} />}
+      {viewMode === "test" && <TestView run={testRun} loading={testLoading} error={testError} onRun={onRunTests} graph={graph} />}
 
       <Controls
         meta={graph?.meta ?? null}

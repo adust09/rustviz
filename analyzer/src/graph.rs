@@ -70,6 +70,7 @@ fn add_crate_nodes(nodes: &mut Vec<Node>, ws: &Workspace) {
             signature: None,
             fields: None,
             variants: None,
+            doc: None,
         });
     }
 }

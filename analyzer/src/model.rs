@@ -71,6 +71,9 @@ pub struct Node {
     /// Enum variants — present only for `Enum` nodes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub variants: Option<Vec<VariantDef>>,
+    /// Rust doc comment (`///`) text, if any — the "intent" of a fn / test.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
