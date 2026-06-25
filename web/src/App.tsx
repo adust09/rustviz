@@ -4,6 +4,7 @@ import { Controls } from "./controls";
 import { Inspector } from "./inspector";
 import { Treemap } from "./treemap";
 import { DiagramView } from "./diagrams/DiagramView";
+import { ERView } from "./diagrams/ERView";
 import { TestView } from "./TestView";
 import { aggregate, type Tile } from "./aggregate";
 import { LENSES, type Graph, type Lens } from "./schema";
@@ -139,6 +140,8 @@ export function App(): JSX.Element {
           onDrillToSequence={drillToSequence}
         />
       )}
+
+      {graph && viewMode === "er" && <ERView graph={graph} />}
 
       {viewMode === "test" && (
         <TestView

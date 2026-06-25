@@ -47,6 +47,25 @@ export const CallStep = z.object({
 });
 export type CallStep = z.infer<typeof CallStep>;
 
+// KV-storage schema (mirrors model.rs TableDef / StorageEntry) — drives the ER diagram.
+export const StorageEntry = z.object({
+  name: z.string(),
+  key: z.string(),
+  value: z.string(),
+  doc: z.string(),
+  value_node_id: z.string().optional(),
+});
+export type StorageEntry = z.infer<typeof StorageEntry>;
+
+export const TableDef = z.object({
+  enum_id: z.string(),
+  enum_name: z.string(),
+  file: z.string(),
+  line: z.number(),
+  variants: z.array(StorageEntry),
+});
+export type TableDef = z.infer<typeof TableDef>;
+
 const SecurityMetrics = z.object({
   unsafe_blocks: z.number(),
   unwraps: z.number(),
@@ -130,6 +149,7 @@ export const Graph = z.object({
   entrypoints: z.array(z.string()),
   cycles: z.array(z.array(z.string())),
   call_steps: z.array(CallStep),
+  tables: z.array(TableDef),
 });
 export type Graph = z.infer<typeof Graph>;
 

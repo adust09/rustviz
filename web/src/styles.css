@@ -559,6 +559,81 @@ body,
   fill: #6b7891;
 }
 
+/* ER (storage-schema) diagram. */
+.er-title {
+  font: 700 12px ui-monospace, Menlo, monospace;
+  fill: #eef2f8;
+}
+.er-kv {
+  font: 11px ui-monospace, Menlo, monospace;
+}
+.er-key {
+  fill: #ffd23f;
+}
+.er-arrow {
+  fill: #6b7891;
+}
+.er-val {
+  fill: #7fd1c0;
+}
+.er-field {
+  font: 10.5px ui-monospace, Menlo, monospace;
+  fill: #aeb9c9;
+  pointer-events: none;
+}
+.er-field-empty {
+  fill: #6b7891;
+  font-style: italic;
+}
+.er-fk {
+  fill: #ffd23f;
+}
+.er-edge-label {
+  font: 9px ui-monospace, Menlo, monospace;
+  fill: #8ea0b8;
+  pointer-events: none;
+}
+.er-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 200px;
+  background: #0d1119e6;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  z-index: 4;
+  padding: 9px 12px 10px;
+}
+.er-legend-h {
+  color: #c7d0dd;
+  font: 700 11px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.er-legend-row {
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #aeb9c9;
+  padding: 1px 0;
+}
+.er-legend-row b {
+  color: #eef2f8;
+}
+.er-legend-key {
+  font: 10px ui-monospace, Menlo, monospace;
+  color: #8ea0b8;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+.er-legend-cokey {
+  color: #3fb6b6;
+}
+.er-legend-fk {
+  color: #ffd23f;
+}
+
 /* Detail panel — inspect a focused building (type) or district (crate). */
 .detail {
   position: absolute;
