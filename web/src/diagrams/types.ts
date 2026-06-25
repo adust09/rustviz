@@ -5,7 +5,7 @@ import type { FieldDef, FnSignature, NodeKind, VariantDef, Visibility } from "..
 // renderers (flat / iso / 3d) consume the same scene. Keeps diagram semantics
 // in one place and the visual style pluggable — same seam as treemap vs lenses.
 
-export type ViewMode = "map" | "structure" | "sequence" | "test";
+export type ViewMode = "map" | "structure" | "sequence" | "test" | "er";
 
 // Normalized virtual space: every scene lays out inside [0,SCENE_W] x [0,SCENE_H];
 // renderers scale it into their own viewport. `layer` doubles as the z depth.
@@ -141,6 +141,64 @@ export interface SequenceScene {
 }
 
 export type DiagramScene = StructureScene | SequenceScene;
+
+// --- ER (KV-storage schema) diagram ---
+// Each entity is one storage table (column family): a Key type -> Value type,
+// laid out as a box whose body lists the resolved value struct's fields. The ER
+// view is self-contained (see ERView.tsx); it does NOT join the DiagramScene
+// union, so the structure/sequence renderers stay untouched.
+
+/** One storage table / column family box. */
+export interface EREntity {
+  /** `${enumId}::${table}` — unique across stores. */
+  id: string;
+  /** Table (enum variant) name, e.g. `BlockHeaders`. */
+  table: string;
+  /** Parsed key type, e.g. `H256` or `(slot || root)`. */
+  key: string;
+  /** Parsed value type, e.g. `BlockHeader` or `parent_root`. */
+  value: string;
+  /** Owning store enum name, e.g. `Table`. */
+  store: string;
+  crate: string;
+  /** Resolved value struct's fields (empty when the value is a scalar / free text). */
+  fields: ERField[];
+  /** Source location to open: the value struct if resolved, else the enum. */
+  srcFile: string;
+  srcLine: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A field row inside an entity box. `fkKey` marks a field whose type matches
+ *  some table's key type (a reference-by-key, e.g. `parent_root: H256`). */
+export interface ERField {
+  name: string;
+  ty: string;
+  fkKey: boolean;
+}
+
+/** A relationship between two tables. `cokey` = same primary key; `fk` = a value
+ *  field composes/references another table's value type. */
+export interface ERRelation {
+  from: string;
+  to: string;
+  kind: "cokey" | "fk";
+  label: string;
+}
+
+export interface ERScene {
+  kind: "er";
+  entities: EREntity[];
+  relations: ERRelation[];
+  /** Detected store enums (one per `TableDef`). */
+  stores: { name: string; count: number }[];
+  crateNames: string[];
+  worldW: number;
+  worldH: number;
+}
 
 /** Common props every renderer accepts. */
 export interface RendererProps<S extends DiagramScene> {

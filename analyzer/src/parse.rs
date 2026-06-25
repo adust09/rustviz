@@ -22,8 +22,29 @@ pub struct Collected {
     pub calls: Vec<(String, Vec<(String, usize)>)>,
     /// `(type_id, trait simple name)` for later `impls` edge resolution.
     pub impls: Vec<(String, String)>,
+    /// Storage-table enums (variants documented `<desc>: <Key> -> <Value>`),
+    /// raw — value type names resolve to node ids later in `graph::assemble`.
+    pub tables: Vec<RawTable>,
     pub file_count: usize,
     pub total_loc: usize,
+}
+
+/// A storage-table enum collected during the walk; value types are still raw
+/// strings here (resolved to node ids in `graph::assemble`).
+pub struct RawTable {
+    pub enum_id: String,
+    pub enum_name: String,
+    pub file: String,
+    pub line: usize,
+    pub entries: Vec<RawEntry>,
+}
+
+/// One `<desc>: <Key> -> <Value>` table parsed from a variant's first doc line.
+pub struct RawEntry {
+    pub name: String,
+    pub key: String,
+    pub value: String,
+    pub doc: String,
 }
 
 impl Collected {
@@ -135,6 +156,32 @@ impl Collected {
         node.visibility = convert_vis(&e.vis);
         node.variants = Some(enum_variants(e));
         self.insert(node);
+        self.detect_storage_table(&id, &e.ident.to_string(), file, span, e);
+    }
+
+    /// Recognize a storage-table enum: variants documented `<desc>: <Key> -> <Value>`
+    /// (a typed KV store, e.g. ethlambda's `Table`). Qualifies only if ≥2 variants
+    /// parse, keeping ordinary doc'd enums out.
+    fn detect_storage_table(&mut self, enum_id: &str, enum_name: &str, file: &str, span: proc_macro2::Span, e: &syn::ItemEnum) {
+        let entries: Vec<RawEntry> = e
+            .variants
+            .iter()
+            .filter_map(|v| {
+                let doc = first_doc_line(&v.attrs)?;
+                let (key, value) = parse_kv_spec(&doc)?;
+                Some(RawEntry { name: v.ident.to_string(), key, value, doc })
+            })
+            .collect();
+        if entries.len() < 2 {
+            return;
+        }
+        self.tables.push(RawTable {
+            enum_id: enum_id.to_string(),
+            enum_name: enum_name.to_string(),
+            file: file.to_string(),
+            line: line_of(span),
+            entries,
+        });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -238,6 +285,39 @@ fn doc_of(attrs: &[syn::Attribute]) -> Option<String> {
     } else {
         Some(lines.join(" ").trim().to_string())
     }
+}
+
+/// First `///` doc line of an item (NOT joined like [`doc_of`]) — storage specs
+/// live on the first line, with explanation paragraphs following after a blank
+/// `///` line that must not bleed into the parsed value.
+fn first_doc_line(attrs: &[syn::Attribute]) -> Option<String> {
+    for attr in attrs {
+        if !attr.path().is_ident("doc") {
+            continue;
+        }
+        if let syn::Meta::NameValue(nv) = &attr.meta {
+            if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. }) = &nv.value {
+                let line = s.value().trim().to_string();
+                if !line.is_empty() {
+                    return Some(line);
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Parse a `<desc>: <Key> -> <Value>` storage spec into `(key, value)`.
+/// `value` is the text after the last ` -> `; `key` is the text after the last
+/// `: ` on the left side (or the whole left side if there is no description).
+fn parse_kv_spec(line: &str) -> Option<(String, String)> {
+    let (left, value) = line.rsplit_once(" -> ")?;
+    let value = value.trim();
+    let key = left.rsplit_once(": ").map(|(_, k)| k).unwrap_or(left).trim();
+    if key.is_empty() || value.is_empty() {
+        return None;
+    }
+    Some((key.to_string(), value.to_string()))
 }
 
 /// Map a `syn::Visibility` to our coarse model. `pub(super)` / `pub(in ...)`

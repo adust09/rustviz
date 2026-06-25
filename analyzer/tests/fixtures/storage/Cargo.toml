@@ -1,0 +1,10 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+# Standalone workspace so `cargo metadata` does not attach it to rustviz.
+[workspace]
