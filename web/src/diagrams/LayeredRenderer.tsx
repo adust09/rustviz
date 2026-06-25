@@ -33,7 +33,7 @@ export function LayeredRenderer(props: RendererProps<DiagramScene>): JSX.Element
 
 const SEQ = { margin: 44, colW: 168, headH: 58, rowH: 30, boxW: 150, boxH: 38, actW: 9 };
 
-function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDrillToSequence }: RendererProps<SequenceScene>): JSX.Element {
+function FlatSequence({ scene, selectedId, onSelect, onOpenSource }: RendererProps<SequenceScene>): JSX.Element {
   const colX = (col: number): number => SEQ.margin + SEQ.colW / 2 + col * SEQ.colW;
   const rowY = (r: number): number => SEQ.headH + 18 + r * SEQ.rowH;
   const lifeX = new Map(scene.lifelines.map((l) => [l.id, colX(l.col)]));
@@ -55,8 +55,11 @@ function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDrillToSequ
         const x = colX(l.col);
         const color = crateColor(l.crate, scene.crateNames);
         const selected = selectedId === l.id || scene.rootId === l.id;
+        const openDef = (): void => { if (l.file) onOpenSource(l.file, l.start, l.end); };
         return (
-          <g key={l.id} onClick={() => { onSelect(l.id); onDrillToSequence?.(l.id); }} style={{ cursor: "pointer" }}>
+          <g key={l.id} onClick={() => { onSelect(l.id); openDef(); }} style={{ cursor: "pointer" }}>
+            {/* Full id on hover — the header label is truncated/abbreviated. */}
+            <title>{l.id}</title>
             <line x1={x} y1={SEQ.headH} x2={x} y2={bottom} stroke="#2c3647" strokeWidth={1} strokeDasharray="3 4" />
             <rect x={x - SEQ.boxW / 2} y={12} width={SEQ.boxW} height={SEQ.boxH} rx={7} fill="#121a26" stroke={selected ? "#ffffff" : color} strokeWidth={selected ? 2 : 1.2} filter="url(#flatShadow)" />
             <circle cx={x - SEQ.boxW / 2 + 12} cy={12 + SEQ.boxH / 2} r={4} fill={color} />
@@ -88,6 +91,7 @@ function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDrillToSequ
           const open = (): void => { if (m.fromFile) onOpenSource(m.fromFile, m.callLine, m.callLine + 8); };
           return (
             <g key={m.row} onClick={open} style={{ cursor: "pointer" }}>
+              <title>{m.label} (self-call)</title>
               <path d={`M${fromX},${y} h26 v12 h-26`} fill="none" stroke="#9aa6b6" strokeWidth={1.1} markerEnd="url(#flatArrow)" />
               <text x={fromX + 32} y={y - 2} className="diag-msg">{truncate(m.label, 22)} ↺</text>
             </g>
@@ -110,6 +114,7 @@ function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDrillToSequ
         const open = (): void => { if (m.fromFile) onOpenSource(m.fromFile, m.callLine, m.callLine + 8); };
         return (
           <g key={m.row} onClick={open} style={{ cursor: "pointer" }}>
+            <title>{m.label}() — call site, click to open</title>
             <line x1={fromX + dir * 2} y1={y} x2={toX - dir * 2} y2={y} stroke="#9aa6b6" strokeWidth={1.1} markerEnd="url(#flatArrow)" opacity={0.9} />
             <text x={(fromX + toX) / 2} y={y - 5} className="diag-msg" textAnchor="middle">{truncate(m.label, Math.max(8, Math.abs(toX - fromX) / CHAR_W - 2))}</text>
           </g>

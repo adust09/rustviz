@@ -69,7 +69,16 @@ export function buildSequenceScene(graph: Graph, focusId: string | null, maxDept
     if (existing !== undefined) return existing;
     const col = lifelines.length;
     lifelineIndex.set(id, col);
-    lifelines.push({ id, title: shortTitle(id), crate: nodeById.get(id)?.crate ?? "", col });
+    const node = nodeById.get(id);
+    lifelines.push({
+      id,
+      title: shortTitle(id),
+      crate: node?.crate ?? "",
+      col,
+      file: node?.file ?? "",
+      start: node?.span.start_line ?? 0,
+      end: node?.span.end_line ?? 0,
+    });
     return col;
   };
 

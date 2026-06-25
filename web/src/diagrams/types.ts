@@ -115,6 +115,10 @@ export interface Lifeline {
   crate: string;
   /** Column index (0-based, left to right in first-call order). */
   col: number;
+  /** Source location of the function, so clicking the header opens its snippet. */
+  file: string;
+  start: number;
+  end: number;
 }
 
 export interface SeqMessage {
