@@ -28,10 +28,11 @@ export function DiagramView({ graph, diagramType, focusNodeId, onDrillToSequence
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [open, setOpen] = useState<OpenSource | null>(null);
   const [source, setSource] = useState<string>("");
+  const [seqDepth, setSeqDepth] = useState(2);
 
   const scene: DiagramScene = useMemo(
-    () => (diagramType === "structure" ? buildStructureScene(graph) : buildSequenceScene(graph, focusNodeId)),
-    [graph, diagramType, focusNodeId],
+    () => (diagramType === "structure" ? buildStructureScene(graph) : buildSequenceScene(graph, focusNodeId, seqDepth)),
+    [graph, diagramType, focusNodeId, seqDepth],
   );
 
   // Clear the selection when the diagram/scene changes.
@@ -73,6 +74,9 @@ export function DiagramView({ graph, diagramType, focusNodeId, onDrillToSequence
   return (
     <div className="diagram-wrap">
       {body}
+      {scene.kind === "sequence" && (
+        <SequenceRootPicker graph={graph} currentTitle={scene.rootTitle} onPick={onDrillToSequence} depth={seqDepth} onDepth={setSeqDepth} count={scene.messages.length} />
+      )}
       {scene.kind === "structure" && <StructureLegend present={new Set(scene.regions.map((r) => r.title))} />}
       <DetailPanel box={detail.box} crate={detail.crate} onClose={() => setSelectedId(null)} onOpenSource={onOpenSource} />
       {open && (
@@ -86,6 +90,54 @@ export function DiagramView({ graph, diagramType, focusNodeId, onDrillToSequence
           <pre>{source || "loading…"}</pre>
         </div>
       )}
+    </div>
+  );
+}
+
+// Pick which function to trace, so the sequence is scoped to one scenario
+// instead of the whole program from main. Suggests entry points + the
+// highest-fan-out functions (orchestrators); searchable across all functions.
+function shortId(id: string): string {
+  return id.split("::").slice(-2).join("::");
+}
+
+function SequenceRootPicker(props: { graph: Graph; currentTitle: string; onPick: (id: string) => void; depth: number; onDepth: (d: number) => void; count: number }): JSX.Element {
+  const { graph, currentTitle, onPick, depth, onDepth, count } = props;
+  const [q, setQ] = useState("");
+  const fns = useMemo(() => graph.nodes.filter((n) => n.kind === "fn"), [graph]);
+  const entries = useMemo(() => new Set(graph.entrypoints), [graph]);
+
+  const results = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (query) return fns.filter((n) => n.id.toLowerCase().includes(query)).slice(0, 25);
+    // Empty query: entry points first, then the biggest orchestrators.
+    const byFanOut = [...fns].sort((a, b) => b.metrics.architecture.fan_out - a.metrics.architecture.fan_out);
+    const seen = new Set<string>();
+    const out = [...fns.filter((n) => entries.has(n.id)), ...byFanOut].filter((n) => (seen.has(n.id) ? false : seen.add(n.id)));
+    return out.slice(0, 15);
+  }, [q, fns, entries]);
+
+  return (
+    <div className="seqroot">
+      <div className="seqroot-cur">trace root · <b>{currentTitle}</b></div>
+      <div className="seqroot-depth">
+        <span>depth</span>
+        <button onClick={() => onDepth(Math.max(1, depth - 1))}>−</button>
+        <b>{depth}</b>
+        <button onClick={() => onDepth(Math.min(8, depth + 1))}>＋</button>
+        <span className="seqroot-count">{count} msgs</span>
+      </div>
+      <input className="seqroot-search" placeholder="trace from… (function)" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="seqroot-list">
+        {results.map((n) => (
+          <div key={n.id} className="seqroot-item" onClick={() => onPick(n.id)} title={n.id}>
+            <span className="seqroot-name">{shortId(n.id)}</span>
+            {entries.has(n.id) && <span className="seqroot-tag">entry</span>}
+            <span className="seqroot-fan">→{n.metrics.architecture.fan_out}</span>
+          </div>
+        ))}
+        {results.length === 0 && <div className="seqroot-empty">no match</div>}
+      </div>
     </div>
   );
 }

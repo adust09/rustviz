@@ -2,11 +2,10 @@ import type { Graph, GraphNode } from "../schema";
 import type { Lifeline, SeqMessage, SequenceScene } from "./types";
 
 // Build the sequence diagram by expanding `call_steps` (ordered, resolved
-// fn→fn calls) from a root entrypoint. Each function is expanded at most once
-// (DAG-ize) and depth is capped, so cyclic / heavily-shared call graphs stay
-// bounded while every message is still drawn.
-
-const MAX_DEPTH = 8;
+// fn→fn calls) from a chosen root. Each function is expanded at most once
+// (DAG-ize); `maxDepth` bounds the expansion so a focused scenario stays short
+// (the call graph is dense — without a depth limit most roots reach most of
+// the program).
 
 interface OrderedCall {
   callee: string;
@@ -48,7 +47,7 @@ function pickRoot(graph: Graph, focusId: string | null, callMap: Map<string, Ord
   return best;
 }
 
-export function buildSequenceScene(graph: Graph, focusId: string | null): SequenceScene {
+export function buildSequenceScene(graph: Graph, focusId: string | null, maxDepth = 4): SequenceScene {
   const crateNames = [...new Set(graph.nodes.filter((n) => n.kind === "crate").map((n) => n.name))];
   const nodeById = new Map<string, GraphNode>(graph.nodes.map((n) => [n.id, n]));
   const callMap = callMapOf(graph);
@@ -72,7 +71,7 @@ export function buildSequenceScene(graph: Graph, focusId: string | null): Sequen
   };
 
   const expand = (callerId: string, depth: number): void => {
-    if (depth >= MAX_DEPTH || expanded.has(callerId)) return;
+    if (depth >= maxDepth || expanded.has(callerId)) return;
     expanded.add(callerId);
     ensureLifeline(callerId);
     const caller = nodeById.get(callerId);
