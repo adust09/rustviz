@@ -1,17 +1,20 @@
 import type { Graph, GraphNode } from "../schema";
-import type { Lifeline, SeqMessage, SequenceScene } from "./types";
+import type { Activation, Lifeline, SeqMessage, SequenceScene } from "./types";
 
-// Build the sequence diagram by expanding `call_steps` (ordered, resolved
-// fn→fn calls) from a chosen root. Each function is expanded at most once
-// (DAG-ize); `maxDepth` bounds the expansion so a focused scenario stays short
-// (the call graph is dense — without a depth limit most roots reach most of
-// the program).
+// Build a UML sequence diagram by walking `call_steps` (ordered, resolved fn→fn
+// calls) as a real call TREE from a chosen root: each call emits a solid request
+// arrow, an activation bar on the callee while it runs, and a dashed RETURN arrow
+// back to the caller (labelled with the callee's return type). A recursion-stack
+// guard stops cycles/recursion from expanding forever; `maxDepth` and a message
+// cap keep a focused scenario short (the call graph is dense).
 
 interface OrderedCall {
   callee: string;
   order: number;
   line: number;
 }
+
+const MAX_MESSAGES = 320; // hard cap so a dense root can't explode the diagram
 
 function callMapOf(graph: Graph): Map<string, OrderedCall[]> {
   const map = new Map<string, OrderedCall[]>();
@@ -56,42 +59,85 @@ export function buildSequenceScene(graph: Graph, focusId: string | null, maxDept
   const lifelines: Lifeline[] = [];
   const lifelineIndex = new Map<string, number>();
   const messages: SeqMessage[] = [];
-  const expanded = new Set<string>();
+  const activations: Activation[] = [];
   let row = 0;
+  let callCount = 0;
+  let truncated = false;
 
-  const ensureLifeline = (id: string): void => {
-    if (lifelineIndex.has(id)) return;
-    lifelineIndex.set(id, lifelines.length);
-    lifelines.push({
-      id,
-      title: shortTitle(id),
-      crate: nodeById.get(id)?.crate ?? "",
-      col: lifelines.length,
-    });
+  const ensureLifeline = (id: string): number => {
+    const existing = lifelineIndex.get(id);
+    if (existing !== undefined) return existing;
+    const col = lifelines.length;
+    lifelineIndex.set(id, col);
+    lifelines.push({ id, title: shortTitle(id), crate: nodeById.get(id)?.crate ?? "", col });
+    return col;
   };
 
-  const expand = (callerId: string, depth: number): void => {
-    if (depth >= maxDepth || expanded.has(callerId)) return;
-    expanded.add(callerId);
-    ensureLifeline(callerId);
+  /** Callee's return type, blank for the unit return `()` (the dashed arrow alone
+   *  already reads as "control returns"). */
+  const returnLabel = (id: string): string => {
+    const rt = nodeById.get(id)?.signature?.return_type;
+    return rt && rt !== "()" ? rt : "";
+  };
+
+  // Expand `callerId`'s calls in source order. `stack` holds the ancestors on the
+  // current path so a callee already in flight is not re-expanded (recursion/cycle).
+  const expand = (callerId: string, depth: number, stack: Set<string>): void => {
+    if (depth >= maxDepth) return;
     const caller = nodeById.get(callerId);
     for (const call of callMap.get(callerId) ?? []) {
-      ensureLifeline(call.callee);
+      if (messages.length >= MAX_MESSAGES) {
+        truncated = true;
+        return;
+      }
+      const calleeCol = ensureLifeline(call.callee);
+      const isSelf = callerId === call.callee;
+      const callRow = row++;
+      callCount++;
       messages.push({
+        kind: "call",
         fromId: callerId,
         toId: call.callee,
-        row: row++,
+        row: callRow,
         depth,
         label: nodeById.get(call.callee)?.name ?? shortTitle(call.callee),
         callLine: call.line,
         fromFile: caller?.file ?? "",
-        selfCall: callerId === call.callee,
+        selfCall: isSelf,
       });
-      expand(call.callee, depth + 1);
+
+      // A self-call's loop already implies its return; don't draw a separate one.
+      if (isSelf) continue;
+
+      // Recursion/cycle: show the call + an immediate return, but don't re-expand.
+      if (!stack.has(call.callee)) {
+        const next = new Set(stack);
+        next.add(call.callee);
+        expand(call.callee, depth + 1, next);
+      }
+
+      const retRow = row++;
+      messages.push({
+        kind: "return",
+        fromId: call.callee,
+        toId: callerId,
+        row: retRow,
+        depth,
+        label: returnLabel(call.callee),
+        callLine: call.line,
+        fromFile: "",
+        selfCall: false,
+      });
+      activations.push({ id: call.callee, col: calleeCol, startRow: callRow, endRow: retRow, depth: depth + 1 });
     }
   };
 
-  if (root) expand(root, 0);
+  if (root) {
+    ensureLifeline(root);
+    expand(root, 0, new Set([root]));
+    // The root is active for the whole interaction.
+    if (messages.length) activations.push({ id: root, col: 0, startRow: 0, endRow: row, depth: 0 });
+  }
 
   return {
     kind: "sequence",
@@ -99,6 +145,9 @@ export function buildSequenceScene(graph: Graph, focusId: string | null, maxDept
     rootTitle: root ? shortTitle(root) : "(no entrypoint)",
     lifelines,
     messages,
+    activations,
+    callCount,
+    truncated,
     crateNames,
   };
 }
