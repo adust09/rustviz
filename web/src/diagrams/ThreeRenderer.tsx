@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { crateColor } from "../lenses";
-import type { DiagramScene, RendererProps, SequenceScene, StructureScene } from "./types";
+import type { DiagramScene, RendererProps, StructureScene } from "./types";
 
 // Real 3D renderer (three.js / WebGL). Rotatable / zoomable via OrbitControls.
 // Structure: crate slabs on the floor, type boxes extruded upward (height ∝
@@ -173,7 +173,6 @@ export default function ThreeRenderer(props: RendererProps<DiagramScene>): JSX.E
     ctx.cityLabels = [];
     ctx.wires = [];
     if (props.scene.kind === "structure") buildStructure(ctx.content, props.scene, ctx.picks, ctx.cityLabels, ctx.wires);
-    else buildSequence(ctx.content, props.scene);
     frameCamera(ctx);
   }, [props.scene]);
 
@@ -246,8 +245,6 @@ function pick(ctx: Ctx, mount: HTMLDivElement, ev: MouseEvent, props: RendererPr
   }
   if (best === null || bestD > 80) return;
   props.onSelect(best);
-  // Lifeline click re-roots the sequence; building click just selects.
-  if (props.scene.kind === "sequence") props.onDrillToSequence?.(best);
 }
 
 function frameCamera(ctx: Ctx): void {
@@ -382,47 +379,3 @@ function buildStructure(root: THREE.Group, scene: StructureScene, picks: Map<str
   }
 }
 
-function buildSequence(root: THREE.Group, scene: SequenceScene): void {
-  const COL = 6;
-  const ROW = 1.1;
-  const length = Math.max(4, scene.messages.length * ROW + 2);
-  const xOf = (col: number): number => col * COL;
-
-  for (const l of scene.lifelines) {
-    const x = xOf(l.col);
-    const color = hexToColor(crateColor(l.crate, scene.crateNames));
-    const head = new THREE.Mesh(
-      new THREE.BoxGeometry(4.4, 1.4, 1.2),
-      new THREE.MeshStandardMaterial({ color, roughness: 0.5 }),
-    );
-    head.position.set(x, 0, 0);
-    head.userData.id = l.id;
-    root.add(head);
-    const pillar = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(x, -0.7, 0), new THREE.Vector3(x, -length, 0)]),
-      new THREE.LineBasicMaterial({ color: 0x2c3647 }),
-    );
-    root.add(pillar);
-    const label = makeLabel(l.title, "three-label");
-    label.position.set(x, 1.2, 0);
-    root.add(label);
-  }
-
-  const xById = new Map(scene.lifelines.map((l) => [l.id, xOf(l.col)]));
-  for (const m of scene.messages) {
-    const fx = xById.get(m.fromId);
-    const tx = xById.get(m.toId);
-    if (fx === undefined || tx === undefined) continue;
-    const y = -1.6 - m.row * ROW;
-    const from = new THREE.Vector3(fx, y, 0);
-    const to = new THREE.Vector3(m.selfCall ? fx + 1.6 : tx, y, 0);
-    root.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), new THREE.LineBasicMaterial({ color: 0x9aa6b6 })));
-    const dir = new THREE.Vector3().subVectors(to, from);
-    const len = dir.length() || 1;
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.6, 8), new THREE.MeshBasicMaterial({ color: 0x9aa6b6 }));
-    cone.position.copy(to);
-    cone.rotation.z = dir.x >= 0 ? -Math.PI / 2 : Math.PI / 2;
-    cone.scale.setScalar(len > 0.5 ? 1 : 0.6);
-    root.add(cone);
-  }
-}

@@ -6,7 +6,6 @@ import type { FieldDef, FnSignature, NodeKind, VariantDef, Visibility } from "..
 // in one place and the visual style pluggable — same seam as treemap vs lenses.
 
 export type ViewMode = "map" | "structure" | "sequence";
-export type RenderStyle = "flat" | "iso" | "3d";
 
 // Normalized virtual space: every scene lays out inside [0,SCENE_W] x [0,SCENE_H];
 // renderers scale it into their own viewport. `layer` doubles as the z depth.

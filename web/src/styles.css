@@ -559,18 +559,6 @@ body,
   fill: #6b7891;
 }
 
-/* Iso sequence: tilt the flat temporal plane back into 3D for depth. Only the
-   svg tilts — the zoom controls stay flat and usable. */
-.iso-tilt {
-  position: absolute;
-  inset: 0;
-  perspective: 1400px;
-}
-.iso-tilt .diag-zoom > svg {
-  transform: rotateX(30deg);
-  transform-origin: top center;
-}
-
 /* Detail panel — inspect a focused building (type) or district (crate). */
 .detail {
   position: absolute;

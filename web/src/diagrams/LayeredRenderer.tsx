@@ -28,7 +28,7 @@ export function LayeredRenderer(props: RendererProps<DiagramScene>): JSX.Element
 
 const SEQ = { margin: 44, colW: 168, headH: 58, rowH: 30, boxW: 150, boxH: 38 };
 
-export function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDrillToSequence }: RendererProps<SequenceScene>): JSX.Element {
+function FlatSequence({ scene, selectedId, onSelect, onOpenSource, onDrillToSequence }: RendererProps<SequenceScene>): JSX.Element {
   const colX = (col: number): number => SEQ.margin + SEQ.colW / 2 + col * SEQ.colW;
   const lifeX = new Map(scene.lifelines.map((l) => [l.id, colX(l.col)]));
   const w = SEQ.margin * 2 + Math.max(1, scene.lifelines.length) * SEQ.colW;

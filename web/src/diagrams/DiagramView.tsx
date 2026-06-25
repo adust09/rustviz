@@ -4,18 +4,16 @@ import type { Graph } from "../schema";
 import { ROLES, buildStructureScene } from "./structureScene";
 import { buildSequenceScene } from "./sequenceScene";
 import { LayeredRenderer } from "./LayeredRenderer";
-import { IsometricRenderer } from "./IsometricRenderer";
 import { DetailPanel } from "./DetailPanel";
-import type { DiagramScene, RenderStyle } from "./types";
+import type { DiagramScene } from "./types";
 
-// three.js is heavy and only the 3D style needs it — load it on demand so the
-// Map / 2D / 2.5D users never pay for the WebGL bundle.
+// Structure renders in 3D (three.js, heavy) — load it on demand so the Map and
+// the 2D sequence view never pay for the WebGL bundle.
 const ThreeRenderer = lazy(() => import("./ThreeRenderer"));
 
 interface DiagramViewProps {
   graph: Graph;
   diagramType: "structure" | "sequence";
-  renderStyle: RenderStyle;
   focusNodeId: string | null;
   onDrillToSequence: (id: string) => void;
 }
@@ -26,7 +24,7 @@ interface OpenSource {
   end: number;
 }
 
-export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDrillToSequence }: DiagramViewProps): JSX.Element {
+export function DiagramView({ graph, diagramType, focusNodeId, onDrillToSequence }: DiagramViewProps): JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [open, setOpen] = useState<OpenSource | null>(null);
   const [source, setSource] = useState<string>("");
@@ -62,18 +60,15 @@ export function DiagramView({ graph, diagramType, renderStyle, focusNodeId, onDr
   const onOpenSource = (file: string, start: number, end: number): void => setOpen({ file, start, end });
   const common = { scene, selectedId, onSelect: setSelectedId, onOpenSource, onDrillToSequence };
 
-  // Structure is 3D-only; the flat / isometric styles apply to the sequence view.
-  const three = (
-    <Suspense fallback={<div className="diagram-placeholder"><p>loading 3D…</p></div>}>
-      <ThreeRenderer {...common} />
-    </Suspense>
-  );
+  // Structure renders in 3D; sequence renders in 2D (flat SVG).
   const body =
-    diagramType === "structure" || renderStyle === "3d"
-      ? three
-      : renderStyle === "iso"
-        ? <IsometricRenderer {...common} />
-        : <LayeredRenderer {...common} />;
+    diagramType === "structure" ? (
+      <Suspense fallback={<div className="diagram-placeholder"><p>loading 3D…</p></div>}>
+        <ThreeRenderer {...common} />
+      </Suspense>
+    ) : (
+      <LayeredRenderer {...common} />
+    );
 
   return (
     <div className="diagram-wrap">

@@ -1,6 +1,6 @@
 import type { Graph, Lens } from "./schema";
 import { HEAT_HIGH, HEAT_LOW, HEAT_MID } from "./lenses";
-import type { RenderStyle, ViewMode } from "./diagrams/types";
+import type { ViewMode } from "./diagrams/types";
 
 interface ControlsProps {
   meta: Graph["meta"] | null;
@@ -14,20 +14,12 @@ interface ControlsProps {
   onToggleDeps: () => void;
   viewMode: ViewMode;
   onSetViewMode: (v: ViewMode) => void;
-  renderStyle: RenderStyle;
-  onSetRenderStyle: (r: RenderStyle) => void;
 }
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: "map", label: "Map" },
-  { id: "structure", label: "Structure" },
-  { id: "sequence", label: "Sequence" },
-];
-
-const RENDER_STYLES: { id: RenderStyle; label: string }[] = [
-  { id: "flat", label: "2D" },
-  { id: "iso", label: "2.5D" },
-  { id: "3d", label: "3D" },
+  { id: "structure", label: "Structure · 3D" },
+  { id: "sequence", label: "Sequence · 2D" },
 ];
 
 const LENS_HINT: Record<Lens, string> = {
@@ -40,7 +32,7 @@ const HEAT_GRADIENT = `linear-gradient(90deg, ${HEAT_LOW}, ${HEAT_MID}, ${HEAT_H
 
 export function Controls(props: ControlsProps): JSX.Element {
   const { meta, active, lenses, onToggleLens, search, onSearch, onSearchSubmit, showDeps, onToggleDeps } = props;
-  const { viewMode, onSetViewMode, renderStyle, onSetRenderStyle } = props;
+  const { viewMode, onSetViewMode } = props;
 
   const hasLens = active.size > 0;
   const colorLabel = hasLens ? [...lenses].filter((l) => active.has(l)).join(" + ") : "crate";
@@ -60,21 +52,6 @@ export function Controls(props: ControlsProps): JSX.Element {
             </button>
           ))}
         </div>
-
-        {/* Render styles apply to the sequence view; structure is 3D-only. */}
-        {viewMode === "sequence" && (
-          <div className="seg" role="group" aria-label="render style" title="Render style">
-            {RENDER_STYLES.map((r) => (
-              <button
-                key={r.id}
-                className={`seg-btn ${renderStyle === r.id ? "active" : ""}`}
-                onClick={() => onSetRenderStyle(r.id)}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {isMap && (
           <>
@@ -126,7 +103,7 @@ export function Controls(props: ControlsProps): JSX.Element {
         )}
         {meta && !isMap && (
           <div className="meta">
-            {viewMode} · {viewMode === "structure" ? "3d" : renderStyle} · {meta.crate_count} crates · {meta.total_loc} LOC
+            {viewMode} · {viewMode === "structure" ? "3D" : "2D"} · {meta.crate_count} crates · {meta.total_loc} LOC
           </div>
         )}
         {hasLens && isMap && (

@@ -6,7 +6,7 @@ import { Treemap } from "./treemap";
 import { DiagramView } from "./diagrams/DiagramView";
 import { aggregate, type Tile } from "./aggregate";
 import { LENSES, type Graph, type Lens } from "./schema";
-import type { RenderStyle, ViewMode } from "./diagrams/types";
+import type { ViewMode } from "./diagrams/types";
 
 const EMPTY_DEPS = new Map();
 
@@ -19,10 +19,9 @@ export function App(): JSX.Element {
   const [selected, setSelected] = useState<Tile | null>(null);
   const [search, setSearch] = useState<string>("");
   const [showDeps, setShowDeps] = useState<boolean>(false);
-  // Map = the treemap; structure/sequence = the 立体 UML diagrams (one of three
-  // render styles). focusNodeId carries a structure-box click into the sequence.
+  // Map = the treemap; structure = the 3D city; sequence = the 2D diagram.
+  // focusNodeId carries a drill into the sequence's root.
   const [viewMode, setViewMode] = useState<ViewMode>("map");
-  const [renderStyle, setRenderStyle] = useState<RenderStyle>("flat");
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
 
   const drillToSequence = (id: string): void => {
@@ -81,7 +80,6 @@ export function App(): JSX.Element {
         <DiagramView
           graph={graph}
           diagramType={viewMode}
-          renderStyle={renderStyle}
           focusNodeId={focusNodeId}
           onDrillToSequence={drillToSequence}
         />
@@ -99,8 +97,6 @@ export function App(): JSX.Element {
         onToggleDeps={() => setShowDeps((v) => !v)}
         viewMode={viewMode}
         onSetViewMode={setViewMode}
-        renderStyle={renderStyle}
-        onSetRenderStyle={setRenderStyle}
       />
 
       {viewMode === "map" && (
