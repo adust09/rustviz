@@ -8,8 +8,8 @@ use petgraph::graph::DiGraph;
 
 use crate::cargo::Workspace;
 use crate::metrics::{architecture, complexity, performance, security};
-use crate::model::{CallStep, Edge, EdgeKind, Graph, Meta, Node, NodeKind};
-use crate::parse::Collected;
+use crate::model::{CallStep, Edge, EdgeKind, Graph, Meta, Node, NodeKind, StorageEntry, TableDef};
+use crate::parse::{Collected, RawTable};
 
 pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_at: &str) -> Graph {
     let file_count = collected.file_count;
@@ -30,6 +30,7 @@ pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_
     normalize_scores(&mut nodes);
 
     let call_steps = ordered_call_steps(&nodes, &collected.calls);
+    let tables = resolve_tables(&nodes, &collected.tables);
     let entrypoints = entrypoints(&nodes);
     let crate_count = ws.crates.len();
 
@@ -46,7 +47,52 @@ pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_
         entrypoints,
         cycles,
         call_steps,
+        tables,
+        dep_graph: ws.dep_graph.clone(),
     }
+}
+
+/// Resolve each storage table's raw value-type string to a workspace Struct/Enum
+/// node id (same-crate preferred). Unresolvable values (scalars, composite keys,
+/// `parent_root`, free text) keep `value_node_id = None`.
+fn resolve_tables(nodes: &[Node], raw: &[RawTable]) -> Vec<TableDef> {
+    let mut by_name: HashMap<&str, Vec<&Node>> = HashMap::new();
+    for n in nodes.iter().filter(|n| matches!(n.kind, NodeKind::Struct | NodeKind::Enum)) {
+        by_name.entry(n.name.as_str()).or_default().push(n);
+    }
+    raw.iter()
+        .map(|t| {
+            let krate = t.enum_id.split("::").next().unwrap_or("");
+            let variants = t
+                .entries
+                .iter()
+                .map(|e| StorageEntry {
+                    name: e.name.clone(),
+                    key: e.key.clone(),
+                    value: e.value.clone(),
+                    doc: e.doc.clone(),
+                    value_node_id: resolve_value_node(&by_name, &e.value, krate),
+                })
+                .collect();
+            TableDef {
+                enum_id: t.enum_id.clone(),
+                enum_name: t.enum_name.clone(),
+                file: t.file.clone(),
+                line: t.line,
+                variants,
+            }
+        })
+        .collect()
+}
+
+/// Best-effort lookup of a value type name to a node id (same-crate preferred).
+fn resolve_value_node(by_name: &HashMap<&str, Vec<&Node>>, value: &str, krate: &str) -> Option<String> {
+    let cands = by_name.get(value)?;
+    cands
+        .iter()
+        .find(|n| n.krate == krate)
+        .or_else(|| cands.first())
+        .map(|n| n.id.clone())
 }
 
 fn add_crate_nodes(nodes: &mut Vec<Node>, ws: &Workspace) {

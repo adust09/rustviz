@@ -5,7 +5,7 @@ import type { FieldDef, FnSignature, NodeKind, VariantDef, Visibility } from "..
 // renderers (flat / iso / 3d) consume the same scene. Keeps diagram semantics
 // in one place and the visual style pluggable — same seam as treemap vs lenses.
 
-export type ViewMode = "map" | "structure" | "sequence" | "test";
+export type ViewMode = "map" | "structure" | "sequence" | "test" | "er" | "deps";
 
 // Normalized virtual space: every scene lays out inside [0,SCENE_W] x [0,SCENE_H];
 // renderers scale it into their own viewport. `layer` doubles as the z depth.
@@ -115,9 +115,15 @@ export interface Lifeline {
   crate: string;
   /** Column index (0-based, left to right in first-call order). */
   col: number;
+  /** Source location of the function, so clicking the header opens its snippet. */
+  file: string;
+  start: number;
+  end: number;
 }
 
 export interface SeqMessage {
+  /** `call` = solid request arrow; `return` = dashed reply arrow back to the caller. */
+  kind: "call" | "return";
   fromId: string;
   toId: string;
   /** Global vertical order (row index). */
@@ -131,16 +137,127 @@ export interface SeqMessage {
   selfCall: boolean;
 }
 
+/** An activation bar: the span on a participant's lifeline while it is executing
+ *  a call (from the call row down to its return row). The hallmark of a UML
+ *  sequence diagram. */
+export interface Activation {
+  /** Lifeline (participant) id the bar sits on. */
+  id: string;
+  /** Lifeline column index. */
+  col: number;
+  startRow: number;
+  endRow: number;
+  /** Nesting depth — staggers overlapping bars on the same lifeline. */
+  depth: number;
+}
+
 export interface SequenceScene {
   kind: "sequence";
   rootId: string | null;
   rootTitle: string;
   lifelines: Lifeline[];
   messages: SeqMessage[];
+  activations: Activation[];
+  /** Number of `call` messages (returns excluded) — for the picker's count. */
+  callCount: number;
+  /** True when expansion hit the message cap and was cut short. */
+  truncated: boolean;
   crateNames: string[];
 }
 
 export type DiagramScene = StructureScene | SequenceScene;
+
+// --- ER (KV-storage schema) diagram ---
+// Each entity is one storage table (column family): a Key type -> Value type,
+// laid out as a box whose body lists the resolved value struct's fields. The ER
+// view is self-contained (see ERView.tsx); it does NOT join the DiagramScene
+// union, so the structure/sequence renderers stay untouched.
+
+/** One storage table / column family box. */
+export interface EREntity {
+  /** `${enumId}::${table}` — unique across stores. */
+  id: string;
+  /** Table (enum variant) name, e.g. `BlockHeaders`. */
+  table: string;
+  /** Parsed key type, e.g. `H256` or `(slot || root)`. */
+  key: string;
+  /** Parsed value type, e.g. `BlockHeader` or `parent_root`. */
+  value: string;
+  /** Owning store enum name, e.g. `Table`. */
+  store: string;
+  crate: string;
+  /** Resolved value struct's fields (empty when the value is a scalar / free text). */
+  fields: ERField[];
+  /** Source location to open: the value struct if resolved, else the enum. */
+  srcFile: string;
+  srcLine: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A field row inside an entity box. `fkKey` marks a field whose type matches
+ *  some table's key type (a reference-by-key, e.g. `parent_root: H256`). */
+export interface ERField {
+  name: string;
+  ty: string;
+  fkKey: boolean;
+}
+
+/** A relationship between two tables. `cokey` = same primary key; `fk` = a value
+ *  field composes/references another table's value type. */
+export interface ERRelation {
+  from: string;
+  to: string;
+  kind: "cokey" | "fk";
+  label: string;
+}
+
+export interface ERScene {
+  kind: "er";
+  entities: EREntity[];
+  relations: ERRelation[];
+  /** Detected store enums (one per `TableDef`). */
+  stores: { name: string; count: number }[];
+  crateNames: string[];
+  worldW: number;
+  worldH: number;
+}
+
+// --- Deps (crate dependency graph) ---
+// A layered DAG of crates (workspace + external/transitive); layer = shortest hop
+// from a workspace crate. Self-contained view (see DepsView.tsx), not in the
+// DiagramScene union.
+
+export interface DepNode {
+  id: string;
+  name: string;
+  version: string;
+  workspace: boolean;
+  /** Shortest dependency distance from a workspace crate (workspace = 0). */
+  layer: number;
+  x: number;
+  y: number;
+  inCount: number;
+  outCount: number;
+}
+
+export interface DepLink {
+  from: string;
+  to: string;
+  kind: "normal" | "dev" | "build";
+}
+
+export interface DepsScene {
+  kind: "deps";
+  nodes: DepNode[];
+  links: DepLink[];
+  layerCount: number;
+  counts: { crates: number; external: number; edges: number; hidden: number };
+  worldW: number;
+  worldH: number;
+}
 
 /** Common props every renderer accepts. */
 export interface RendererProps<S extends DiagramScene> {

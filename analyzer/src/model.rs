@@ -20,6 +20,14 @@ pub struct Graph {
     /// Unlike the deduped weighted `Calls` edges, these preserve source order
     /// and repeats. See [`CallStep`].
     pub call_steps: Vec<CallStep>,
+    /// KV-storage schema tables detected from storage-table enums (variants
+    /// documented as `<desc>: <Key> -> <Value>`). Drives the ER diagram. See
+    /// [`TableDef`]. A parallel array like `call_steps` — not a `NodeKind`.
+    pub tables: Vec<TableDef>,
+    /// Full resolved crate dependency graph (workspace + external/transitive),
+    /// from `cargo metadata`. Drives the Deps tab. Kept separate from
+    /// `nodes`/`edges` so the treemap/structure paths see workspace crates only.
+    pub dep_graph: DepGraph,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,6 +206,70 @@ pub struct FieldDef {
 pub struct VariantDef {
     pub name: String,
     pub payload: Vec<String>,
+}
+
+/// The resolved crate dependency graph (workspace + external/transitive crates).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DepGraph {
+    pub crates: Vec<DepCrate>,
+    pub edges: Vec<DepEdge>,
+}
+
+/// One crate in the dependency graph, keyed by its cargo `PackageId` repr.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepCrate {
+    /// Stable id (cargo `PackageId` repr) — unique even across duplicate versions.
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    /// True for workspace members; false for external/transitive crates.
+    pub workspace: bool,
+}
+
+/// A `from -> to` dependency edge (ids are `DepCrate.id`), tagged with its kind.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepEdge {
+    pub from: String,
+    pub to: String,
+    pub kind: DepKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DepKind {
+    Normal,
+    Dev,
+    Build,
+}
+
+/// A storage-table enum: one persistence store whose variants are column
+/// families / tables. Detected from variants documented `<desc>: <Key> -> <Value>`
+/// (e.g. ethlambda's `Table` enum, an RocksDB/in-memory KV store).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TableDef {
+    /// Parent enum node id — groups all tables of one store.
+    pub enum_id: String,
+    /// Enum identifier, e.g. `Table`.
+    pub enum_name: String,
+    pub file: String,
+    pub line: usize,
+    pub variants: Vec<StorageEntry>,
+}
+
+/// One table / column family within a [`TableDef`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StorageEntry {
+    /// Variant identifier, e.g. `BlockHeaders`.
+    pub name: String,
+    /// Parsed key type, e.g. `H256` or `(slot || root)`.
+    pub key: String,
+    /// Parsed value type, e.g. `BlockHeader` or `parent_root`.
+    pub value: String,
+    /// The first doc line (the `<desc>: <Key> -> <Value>` spec line).
+    pub doc: String,
+    /// Resolved Struct/Enum node id when `value` names a workspace type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value_node_id: Option<String>,
 }
 
 /// One ordered call from a function body to a resolved workspace function.
