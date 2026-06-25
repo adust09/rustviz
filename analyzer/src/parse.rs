@@ -8,15 +8,18 @@ use anyhow::Result;
 use syn::spanned::Spanned;
 use walkdir::WalkDir;
 
-use crate::model::{Metrics, Node, NodeKind, Span};
+use crate::model::{
+    FieldDef, FnSignature, Metrics, Node, NodeKind, ParamDef, Span, VariantDef, Visibility,
+};
 use crate::visit::RawFn;
 
 /// Accumulates everything parsed across all crates (modules deduped by id).
 #[derive(Default)]
 pub struct Collected {
     pub nodes: BTreeMap<String, Node>,
-    /// `(fn_id, called idents)` for later name-based call resolution.
-    pub calls: Vec<(String, Vec<String>)>,
+    /// `(fn_id, [(called ident, call-site line)])` in source order, for later
+    /// name-based call resolution (both weighted edges and ordered call steps).
+    pub calls: Vec<(String, Vec<(String, usize)>)>,
     /// `(type_id, trait simple name)` for later `impls` edge resolution.
     pub impls: Vec<(String, String)>,
     pub file_count: usize,
@@ -65,10 +68,10 @@ impl Collected {
                 syn::Item::Mod(m) => self.handle_mod(krate, module_id, file, m),
                 syn::Item::Fn(f) => {
                     let id = format!("{module_id}::{}", f.sig.ident);
-                    self.add_fn(krate, module_id, module_id, file, &id, &f.sig.ident.to_string(), item.span(), Some(&f.block));
+                    self.add_fn(krate, module_id, module_id, file, &id, &f.sig.ident.to_string(), item.span(), Some(&f.block), Some(&f.sig), convert_vis(&f.vis), doc_of(&f.attrs));
                 }
-                syn::Item::Struct(s) => self.add_type(krate, module_id, file, &s.ident.to_string(), NodeKind::Struct, item.span()),
-                syn::Item::Enum(e) => self.add_type(krate, module_id, file, &e.ident.to_string(), NodeKind::Enum, item.span()),
+                syn::Item::Struct(s) => self.add_struct(krate, module_id, file, s, item.span()),
+                syn::Item::Enum(e) => self.add_enum(krate, module_id, file, e, item.span()),
                 syn::Item::Trait(t) => self.handle_trait(krate, module_id, file, t),
                 syn::Item::Impl(i) => self.handle_impl(krate, module_id, file, i),
                 _ => {}
@@ -86,11 +89,12 @@ impl Collected {
 
     fn handle_trait(&mut self, krate: &str, module_id: &str, file: &str, t: &syn::ItemTrait) {
         let trait_id = format!("{module_id}::{}", t.ident);
-        self.add_node(krate, module_id, module_id, file, &trait_id, &t.ident.to_string(), NodeKind::Trait, t.span(), None);
+        self.add_node(krate, module_id, module_id, file, &trait_id, &t.ident.to_string(), NodeKind::Trait, t.span(), convert_vis(&t.vis));
         for ti in &t.items {
             if let syn::TraitItem::Fn(m) = ti {
                 let id = format!("{trait_id}::{}", m.sig.ident);
-                self.add_fn(krate, module_id, &trait_id, file, &id, &m.sig.ident.to_string(), m.span(), m.default.as_ref());
+                // Trait items have no own visibility; they follow the trait's.
+                self.add_fn(krate, module_id, &trait_id, file, &id, &m.sig.ident.to_string(), m.span(), m.default.as_ref(), Some(&m.sig), convert_vis(&t.vis), doc_of(&m.attrs));
             }
         }
     }
@@ -102,7 +106,7 @@ impl Collected {
         let type_id = format!("{module_id}::{type_name}");
         // Best-effort: create a placeholder type node if the type was defined elsewhere.
         if !self.nodes.contains_key(&type_id) {
-            self.add_node(krate, module_id, module_id, file, &type_id, &type_name, NodeKind::Struct, i.self_ty.span(), None);
+            self.add_node(krate, module_id, module_id, file, &type_id, &type_name, NodeKind::Struct, i.self_ty.span(), Visibility::Private);
         }
         if let Some((_, path, _)) = &i.trait_ {
             if let Some(seg) = path.segments.last() {
@@ -112,18 +116,30 @@ impl Collected {
         for ii in &i.items {
             if let syn::ImplItem::Fn(m) = ii {
                 let id = format!("{type_id}::{}", m.sig.ident);
-                self.add_fn(krate, module_id, &type_id, file, &id, &m.sig.ident.to_string(), m.span(), Some(&m.block));
+                self.add_fn(krate, module_id, &type_id, file, &id, &m.sig.ident.to_string(), m.span(), Some(&m.block), Some(&m.sig), convert_vis(&m.vis), doc_of(&m.attrs));
             }
         }
     }
 
-    fn add_type(&mut self, krate: &str, module_id: &str, file: &str, name: &str, kind: NodeKind, span: proc_macro2::Span) {
-        let id = format!("{module_id}::{name}");
-        self.add_node(krate, module_id, module_id, file, &id, name, kind, span, None);
+    fn add_struct(&mut self, krate: &str, module_id: &str, file: &str, s: &syn::ItemStruct, span: proc_macro2::Span) {
+        let id = format!("{module_id}::{}", s.ident);
+        let mut node = make_node(&id, &s.ident.to_string(), NodeKind::Struct, krate, module_id, module_id, file, span, Metrics::default());
+        node.visibility = convert_vis(&s.vis);
+        node.fields = Some(struct_fields(&s.fields));
+        self.insert(node);
+    }
+
+    fn add_enum(&mut self, krate: &str, module_id: &str, file: &str, e: &syn::ItemEnum, span: proc_macro2::Span) {
+        let id = format!("{module_id}::{}", e.ident);
+        let mut node = make_node(&id, &e.ident.to_string(), NodeKind::Enum, krate, module_id, module_id, file, span, Metrics::default());
+        node.visibility = convert_vis(&e.vis);
+        node.variants = Some(enum_variants(e));
+        self.insert(node);
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn add_fn(&mut self, krate: &str, module_id: &str, parent: &str, file: &str, id: &str, name: &str, span: proc_macro2::Span, block: Option<&syn::Block>) {
+    #[allow(clippy::too_many_arguments)]
+    fn add_fn(&mut self, krate: &str, module_id: &str, parent: &str, file: &str, id: &str, name: &str, span: proc_macro2::Span, block: Option<&syn::Block>, sig: Option<&syn::Signature>, vis: Visibility, doc: Option<String>) {
         let mut metrics = Metrics::default();
         if let Some(block) = block {
             let raw = RawFn::collect(name, block);
@@ -133,13 +149,18 @@ impl Collected {
             self.calls.push((id.to_string(), raw.calls));
         }
         metrics.complexity.loc = loc_of(span) as u32;
-        self.insert(make_node(id, name, NodeKind::Fn, krate, module_id, parent, file, span, metrics));
+        let mut node = make_node(id, name, NodeKind::Fn, krate, module_id, parent, file, span, metrics);
+        node.visibility = vis;
+        node.signature = sig.map(build_signature);
+        node.doc = doc;
+        self.insert(node);
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn add_node(&mut self, krate: &str, module_id: &str, parent: &str, file: &str, id: &str, name: &str, kind: NodeKind, span: proc_macro2::Span, _block: Option<&syn::Block>) {
-        let metrics = Metrics::default();
-        self.insert(make_node(id, name, kind, krate, module_id, parent, file, span, metrics));
+    fn add_node(&mut self, krate: &str, module_id: &str, parent: &str, file: &str, id: &str, name: &str, kind: NodeKind, span: proc_macro2::Span, vis: Visibility) {
+        let mut node = make_node(id, name, kind, krate, module_id, parent, file, span, Metrics::default());
+        node.visibility = vis;
+        self.insert(node);
     }
 
     fn ensure_module(&mut self, krate: &str, module_id: &str, file: &str, line: usize) {
@@ -163,6 +184,11 @@ impl Collected {
                 loc: 0,
                 parent,
                 metrics: Metrics::default(),
+                visibility: Visibility::default(),
+                signature: None,
+                fields: None,
+                variants: None,
+                doc: None,
             });
         }
     }
@@ -186,7 +212,126 @@ fn make_node(id: &str, name: &str, kind: NodeKind, krate: &str, module: &str, pa
         loc: loc_of(span),
         parent: parent.to_string(),
         metrics,
+        visibility: Visibility::default(),
+        signature: None,
+        fields: None,
+        variants: None,
+        doc: None,
     }
+}
+
+/// Concatenate the `///` doc-comment lines of an item into one trimmed string.
+fn doc_of(attrs: &[syn::Attribute]) -> Option<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for attr in attrs {
+        if !attr.path().is_ident("doc") {
+            continue;
+        }
+        if let syn::Meta::NameValue(nv) = &attr.meta {
+            if let syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(s), .. }) = &nv.value {
+                lines.push(s.value().trim().to_string());
+            }
+        }
+    }
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join(" ").trim().to_string())
+    }
+}
+
+/// Map a `syn::Visibility` to our coarse model. `pub(super)` / `pub(in ...)`
+/// collapse to `Private` since they aren't reachable from arbitrary crates.
+fn convert_vis(vis: &syn::Visibility) -> Visibility {
+    match vis {
+        syn::Visibility::Public(_) => Visibility::Public,
+        syn::Visibility::Restricted(r) if r.path.is_ident("crate") => Visibility::PubCrate,
+        _ => Visibility::Private,
+    }
+}
+
+/// Compact, display-friendly rendering of a `syn::Type` (e.g. `HashMap<K, V>`).
+fn ty_string(ty: &syn::Type) -> String {
+    normalize_ty(&quote::quote!(#ty).to_string())
+}
+
+/// `quote` inserts a space around every token; tighten the common punctuation
+/// so types read like source (`Vec < u8 >` -> `Vec<u8>`, `& 'a str` -> `&'a str`).
+fn normalize_ty(s: &str) -> String {
+    s.replace(" ::", "::")
+        .replace(":: ", "::")
+        .replace(" <", "<")
+        .replace("< ", "<")
+        .replace(" >", ">")
+        .replace("> ", ">")
+        .replace(" ,", ",")
+        .replace("& ", "&")
+}
+
+fn build_signature(sig: &syn::Signature) -> FnSignature {
+    let mut params = Vec::new();
+    let mut is_method = false;
+    for arg in &sig.inputs {
+        match arg {
+            syn::FnArg::Receiver(r) => {
+                is_method = true;
+                let prefix = if r.reference.is_some() { "&" } else { "" };
+                let mutability = if r.mutability.is_some() { "mut " } else { "" };
+                params.push(ParamDef { name: "self".into(), ty: format!("{prefix}{mutability}self") });
+            }
+            syn::FnArg::Typed(pt) => {
+                let name = match pt.pat.as_ref() {
+                    syn::Pat::Ident(i) => i.ident.to_string(),
+                    _ => "_".into(),
+                };
+                params.push(ParamDef { name, ty: ty_string(&pt.ty) });
+            }
+        }
+    }
+    let return_type = match &sig.output {
+        syn::ReturnType::Default => "()".to_string(),
+        syn::ReturnType::Type(_, ty) => ty_string(ty),
+    };
+    FnSignature { params, return_type, is_async: sig.asyncness.is_some(), is_method }
+}
+
+fn struct_fields(fields: &syn::Fields) -> Vec<FieldDef> {
+    match fields {
+        syn::Fields::Named(named) => named
+            .named
+            .iter()
+            .map(|f| FieldDef {
+                name: f.ident.as_ref().map(ToString::to_string).unwrap_or_default(),
+                ty: ty_string(&f.ty),
+                visibility: convert_vis(&f.vis),
+            })
+            .collect(),
+        syn::Fields::Unnamed(unnamed) => unnamed
+            .unnamed
+            .iter()
+            .enumerate()
+            .map(|(i, f)| FieldDef { name: i.to_string(), ty: ty_string(&f.ty), visibility: convert_vis(&f.vis) })
+            .collect(),
+        syn::Fields::Unit => Vec::new(),
+    }
+}
+
+fn enum_variants(e: &syn::ItemEnum) -> Vec<VariantDef> {
+    e.variants
+        .iter()
+        .map(|v| {
+            let payload = match &v.fields {
+                syn::Fields::Named(named) => named
+                    .named
+                    .iter()
+                    .map(|f| format!("{}: {}", f.ident.as_ref().map(ToString::to_string).unwrap_or_default(), ty_string(&f.ty)))
+                    .collect(),
+                syn::Fields::Unnamed(unnamed) => unnamed.unnamed.iter().map(|f| ty_string(&f.ty)).collect(),
+                syn::Fields::Unit => Vec::new(),
+            };
+            VariantDef { name: v.ident.to_string(), payload }
+        })
+        .collect()
 }
 
 fn line_of(span: proc_macro2::Span) -> usize {

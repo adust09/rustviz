@@ -19,6 +19,34 @@ export type EdgeKind = z.infer<typeof EdgeKind>;
 
 const Span = z.object({ start_line: z.number(), end_line: z.number() });
 
+// UML detail (mirrors model.rs Visibility / ParamDef / FnSignature / FieldDef / VariantDef).
+export const Visibility = z.enum(["public", "pubcrate", "private"]);
+export type Visibility = z.infer<typeof Visibility>;
+
+const ParamDef = z.object({ name: z.string(), ty: z.string() });
+export const FnSignature = z.object({
+  params: z.array(ParamDef),
+  return_type: z.string(),
+  is_async: z.boolean(),
+  is_method: z.boolean(),
+});
+export type FnSignature = z.infer<typeof FnSignature>;
+
+export const FieldDef = z.object({ name: z.string(), ty: z.string(), visibility: Visibility });
+export type FieldDef = z.infer<typeof FieldDef>;
+
+export const VariantDef = z.object({ name: z.string(), payload: z.array(z.string()) });
+export type VariantDef = z.infer<typeof VariantDef>;
+
+// Ordered, resolved fn→fn call (mirrors model.rs CallStep) — drives sequence diagrams.
+export const CallStep = z.object({
+  caller: z.string(),
+  callee: z.string(),
+  order: z.number(),
+  call_line: z.number(),
+});
+export type CallStep = z.infer<typeof CallStep>;
+
 const SecurityMetrics = z.object({
   unsafe_blocks: z.number(),
   unwraps: z.number(),
@@ -73,6 +101,11 @@ export const GraphNode = z.object({
   loc: z.number(),
   parent: z.string(),
   metrics: Metrics,
+  visibility: Visibility.default("private"),
+  signature: FnSignature.optional(),
+  fields: z.array(FieldDef).optional(),
+  variants: z.array(VariantDef).optional(),
+  doc: z.string().optional(),
 });
 export type GraphNode = z.infer<typeof GraphNode>;
 
@@ -96,6 +129,7 @@ export const Graph = z.object({
   edges: z.array(GraphEdge),
   entrypoints: z.array(z.string()),
   cycles: z.array(z.array(z.string())),
+  call_steps: z.array(CallStep),
 });
 export type Graph = z.infer<typeof Graph>;
 

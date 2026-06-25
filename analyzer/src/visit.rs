@@ -11,8 +11,9 @@ pub struct RawFn {
     pub security: SecurityMetrics,
     pub performance: PerformanceMetrics,
     pub complexity: ComplexityMetrics,
-    /// Called identifiers (method name or last path segment), with repeats.
-    pub calls: Vec<String>,
+    /// Called identifiers (method name or last path segment) in source order,
+    /// each paired with its call-site line. Repeats are kept.
+    pub calls: Vec<(String, usize)>,
     /// Function's own name, for self-recursion detection.
     own_name: String,
     nesting: u32,
@@ -143,7 +144,7 @@ impl<'ast> Visit<'ast> for RawFn {
             "to_string" | "to_owned" | "to_vec" => self.performance.allocs += 1,
             _ => {}
         }
-        self.calls.push(method);
+        self.calls.push((method, node.method.span().start().line));
         visit::visit_expr_method_call(self, node);
     }
 
@@ -160,7 +161,8 @@ impl<'ast> Visit<'ast> for RawFn {
             if last == self.own_name {
                 self.performance.recursion += 1;
             }
-            self.calls.push(last);
+            let line = p.path.segments.last().map(|s| s.ident.span().start().line).unwrap_or(0);
+            self.calls.push((last, line));
         }
         visit::visit_expr_call(self, node);
     }

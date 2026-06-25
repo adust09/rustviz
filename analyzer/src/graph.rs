@@ -8,7 +8,7 @@ use petgraph::graph::DiGraph;
 
 use crate::cargo::Workspace;
 use crate::metrics::{architecture, complexity, performance, security};
-use crate::model::{Edge, EdgeKind, Graph, Meta, Node, NodeKind};
+use crate::model::{CallStep, Edge, EdgeKind, Graph, Meta, Node, NodeKind};
 use crate::parse::Collected;
 
 pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_at: &str) -> Graph {
@@ -29,6 +29,7 @@ pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_
     mark_cycles(&mut nodes, &cycles);
     normalize_scores(&mut nodes);
 
+    let call_steps = ordered_call_steps(&nodes, &collected.calls);
     let entrypoints = entrypoints(&nodes);
     let crate_count = ws.crates.len();
 
@@ -44,6 +45,7 @@ pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_
         edges,
         entrypoints,
         cycles,
+        call_steps,
     }
 }
 
@@ -64,6 +66,11 @@ fn add_crate_nodes(nodes: &mut Vec<Node>, ws: &Workspace) {
             loc: 0,
             parent: String::new(),
             metrics: Default::default(),
+            visibility: crate::model::Visibility::Public,
+            signature: None,
+            fields: None,
+            variants: None,
+            doc: None,
         });
     }
 }
@@ -94,20 +101,30 @@ fn depends_edges(ws: &Workspace, id_set: &HashSet<String>) -> Vec<Edge> {
         .collect()
 }
 
-/// Resolve called idents to workspace fn nodes (same-crate preferred).
-fn call_edges(nodes: &[Node], calls: &[(String, Vec<String>)]) -> Vec<Edge> {
+/// Index workspace fn nodes by simple name for call resolution.
+fn fn_index(nodes: &[Node]) -> HashMap<&str, Vec<&Node>> {
     let mut by_name: HashMap<&str, Vec<&Node>> = HashMap::new();
     for n in nodes.iter().filter(|n| n.kind == NodeKind::Fn) {
         by_name.entry(n.name.as_str()).or_default().push(n);
     }
-    let krate_of: HashMap<&str, &str> = nodes.iter().map(|n| (n.id.as_str(), n.krate.as_str())).collect();
+    by_name
+}
+
+fn krate_index(nodes: &[Node]) -> HashMap<&str, &str> {
+    nodes.iter().map(|n| (n.id.as_str(), n.krate.as_str())).collect()
+}
+
+/// Resolve called idents to workspace fn nodes (same-crate preferred).
+fn call_edges(nodes: &[Node], calls: &[(String, Vec<(String, usize)>)]) -> Vec<Edge> {
+    let by_name = fn_index(nodes);
+    let krate_of = krate_index(nodes);
 
     let mut seen: HashSet<(String, String)> = HashSet::new();
     let mut edges = Vec::new();
     for (src_id, idents) in calls {
         let src_krate = krate_of.get(src_id.as_str()).copied().unwrap_or("");
         let mut counts: HashMap<&str, u32> = HashMap::new();
-        for ident in idents {
+        for (ident, _line) in idents {
             *counts.entry(ident.as_str()).or_insert(0) += 1;
         }
         for (ident, weight) in counts {
@@ -123,6 +140,34 @@ fn call_edges(nodes: &[Node], calls: &[(String, Vec<String>)]) -> Vec<Edge> {
         }
     }
     edges
+}
+
+/// Ordered, resolved call steps for sequence diagrams. Unlike [`call_edges`]
+/// these preserve source order and repeats; each call resolves to its single
+/// best target (same-crate preferred).
+fn ordered_call_steps(nodes: &[Node], calls: &[(String, Vec<(String, usize)>)]) -> Vec<CallStep> {
+    let by_name = fn_index(nodes);
+    let krate_of = krate_index(nodes);
+
+    let mut steps = Vec::new();
+    for (src_id, idents) in calls {
+        let src_krate = krate_of.get(src_id.as_str()).copied().unwrap_or("");
+        for (order, (ident, line)) in idents.iter().enumerate() {
+            let Some(cands) = by_name.get(ident.as_str()) else {
+                continue;
+            };
+            let Some(callee) = pick_targets(cands, src_krate, src_id).into_iter().next() else {
+                continue;
+            };
+            steps.push(CallStep {
+                caller: src_id.clone(),
+                callee,
+                order: order as u32,
+                call_line: *line,
+            });
+        }
+    }
+    steps
 }
 
 /// Prefer same-crate candidates; fall back to all (capped to avoid common-name noise).

@@ -1,5 +1,8 @@
 //! rustviz: analyze a Rust project and serve a 3D visualization on localhost.
 
+mod coverage;
+mod tests;
+
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -40,6 +43,10 @@ struct AppState {
     default_path: PathBuf,
     /// Canonical workspace root used to resolve `/api/source` requests safely.
     root: Arc<Mutex<PathBuf>>,
+    /// Last test run, so a reload shows the previous results without re-running.
+    last_tests: Arc<Mutex<Option<tests::TestRun>>>,
+    /// Last coverage report, cached the same way.
+    last_coverage: Arc<Mutex<Option<coverage::CoverageReport>>>,
 }
 
 #[tokio::main]
@@ -65,11 +72,15 @@ async fn main() -> Result<()> {
     let state = AppState {
         default_path: cli.project.clone(),
         root: Arc::new(Mutex::new(root)),
+        last_tests: Arc::new(Mutex::new(None)),
+        last_coverage: Arc::new(Mutex::new(None)),
     };
 
     let app = Router::new()
         .route("/api/analyze", post(analyze_handler))
         .route("/api/source", get(source_handler))
+        .route("/api/tests", post(tests_run_handler).get(tests_get_handler))
+        .route("/api/coverage", post(coverage_run_handler).get(coverage_get_handler))
         .fallback(static_handler)
         .with_state(state);
 
@@ -106,6 +117,46 @@ async fn analyze_handler(State(st): State<AppState>, body: Option<Json<AnalyzeRe
         }
         Err(err) => (StatusCode::BAD_REQUEST, format!("analyze failed: {err}")).into_response(),
     }
+}
+
+/// Run the project's tests (in the canonical workspace root), cache the result,
+/// and return it. Always 200 (errors are carried in the body's `ok`/`error`).
+async fn tests_run_handler(State(st): State<AppState>) -> Response {
+    let root = match st.root.lock() {
+        Ok(g) => g.clone(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "state error").into_response(),
+    };
+    let run = tests::run(&root).await;
+    if let Ok(mut g) = st.last_tests.lock() {
+        *g = Some(run.clone());
+    }
+    Json(run).into_response()
+}
+
+/// Return the last cached test run (or `null`) without running anything — so a
+/// browser reload shows the previous results instead of re-running.
+async fn tests_get_handler(State(st): State<AppState>) -> Response {
+    let cached = st.last_tests.lock().ok().and_then(|g| g.clone());
+    Json(cached).into_response()
+}
+
+/// Run `cargo llvm-cov`, cache, and return the coverage report.
+async fn coverage_run_handler(State(st): State<AppState>) -> Response {
+    let root = match st.root.lock() {
+        Ok(g) => g.clone(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "state error").into_response(),
+    };
+    let report = coverage::run(&root).await;
+    if let Ok(mut g) = st.last_coverage.lock() {
+        *g = Some(report.clone());
+    }
+    Json(report).into_response()
+}
+
+/// Return the last cached coverage report (or `null`).
+async fn coverage_get_handler(State(st): State<AppState>) -> Response {
+    let cached = st.last_coverage.lock().ok().and_then(|g| g.clone());
+    Json(cached).into_response()
 }
 
 #[derive(Deserialize)]

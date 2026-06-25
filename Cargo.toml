@@ -13,6 +13,7 @@ serde_json = "1"
 anyhow = "1"
 syn = { version = "2", features = ["full", "visit", "extra-traits"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
+quote = "1"
 cargo_metadata = "0.18"
 walkdir = "2"
 petgraph = "0.6"

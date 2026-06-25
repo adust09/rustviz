@@ -1,6 +1,6 @@
 ---
 title: RustViz Architecture
-last_updated: 2026-06-23
+last_updated: 2026-06-25
 tags:
   - rustviz
   - architecture
@@ -21,7 +21,7 @@ rustviz <path>
         ↓ serde_json
   [2] server  (Rust bin)    axum: /api/analyze, /api/source, embedded web/dist
         ↓ HTTP (127.0.0.1:7878)
-  [3] web     (TS/Vite)     aggregate to crate/module treemap (d3-hierarchy), lens recolor
+  [3] web     (TS/Vite)     treemap (d3-hierarchy) + UML structure/sequence diagrams (SVG / three.js)
 ```
 
 ### [1] analyzer (`analyzer/`)
@@ -45,6 +45,14 @@ A thin `axum` binary:
 - `POST /api/analyze {path?}` → runs the analyzer, returns the `Graph` JSON.
 - `GET /api/source?file&start&end` → returns a source line range. **Path traversal is
   blocked** by canonicalizing and requiring the result to stay under the workspace root.
+- `POST /api/tests` → runs `cargo test` in the project and returns a parsed `TestRun`
+  (`server/src/tests.rs`).
+- `POST /api/coverage` → runs `cargo llvm-cov` and returns a `CoverageReport` of per-file
+  line coverage (`server/src/coverage.rs`); `ok=false` + an install hint if `cargo-llvm-cov`
+  is absent. **These two endpoints are the only places the server executes project code** —
+  the analyzer crate stays deterministic and never runs anything. Each caches its last run
+  in `AppState`, so the matching `GET` returns it without re-executing (a reload doesn't
+  re-run; coverage, being expensive, is *only* reachable via the explicit `POST`).
 - Everything else → embedded `web/dist` assets via `rust-embed` (SPA fallback to
   `index.html`). The server binds to `127.0.0.1` only.
 
@@ -56,13 +64,22 @@ A thin `axum` binary:
 | `aggregate.ts` | Roll functions up to a crate → top-level-module treemap: sum LOC + raw metric counts per tile, normalize scores across tiles, collect crate dependencies |
 | `lenses.ts` | **Pure** color helpers + the lens weight formulas (ported from `metrics/*.rs`) — the only file to touch when adding a lens |
 | `treemap.tsx` | `d3-hierarchy` treemap layout rendered as SVG: crate regions, module tiles colored by lens, dependency-arrow overlay, click/hover |
-| `inspector.tsx`, `controls.tsx`, `App.tsx` | React UI: tile inspector (aggregated metrics, deps, hottest functions), lens switcher, search |
+| `diagrams/` | Structure + Sequence. **Scene builders** (`structureScene.ts`, `sequenceScene.ts`) turn the Graph into render-agnostic geometry; **Structure** renders in 3D (`ThreeRenderer.tsx`, three.js/WebGL — lazy-loaded — a role-zoned code city), **Sequence** in 2D (`LayeredRenderer.tsx`, flat SVG). `DiagramView.tsx` builds the scene and picks the renderer; `ZoomPanSvg.tsx` adds pan/zoom |
+| `TestView.tsx`, `testRun.ts`, `coverage.ts` | The Test tab: `POST /api/tests` → table of every test with its kind (unit / integration·E2E / doc, by location) and an *intent* column (its doc comment, falling back to a humanized name), failures expandable to the panic message; plus a coverage panel (`POST /api/coverage`) showing overall line % and a per-crate → per-file breakdown colored low/mid/high |
+| `inspector.tsx`, `controls.tsx`, `App.tsx` | React UI: tile inspector, lens switcher, search, the four-tab switch (Map / Structure / Sequence / Test), and the cached test/coverage state |
+
+The diagram layer reuses the same seam as the lenses: the **scene** (what to show — boxes, lifelines, edges, positions) is computed once, and the **render style** (how to draw it — SVG vs WebGL) is pluggable. Structure and sequence diagrams need richer data than the treemap, so the JSON contract carries per-node UML detail (`visibility`, `signature`, `fields`, `variants`) and `call_steps` (ordered, resolved fn→fn calls).
 
 ## The JSON contract
 
 `analyzer/src/model.rs` (serde, snake_case) ⇔ `web/src/schema.ts` (Zod). Each node
 carries raw metric counts plus a normalized `score` per lens; the frontend owns all
 visual interpretation. This is why a new evaluation lens is a one-file frontend change.
+
+The Test tab adds two more dual-maintained contracts on the same pattern (serde ⇔ Zod):
+`server/src/tests.rs` ⇔ `web/src/testRun.ts` (`TestRun`) and
+`server/src/coverage.rs` ⇔ `web/src/coverage.ts` (`CoverageReport`). They are independent
+of the Graph — the Test tab is a standalone dashboard, not derived from the analysis.
 
 ## Design decisions
 
