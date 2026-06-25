@@ -75,7 +75,7 @@ export function DiagramView({ graph, diagramType, focusNodeId, onDrillToSequence
     <div className="diagram-wrap">
       {body}
       {scene.kind === "sequence" && (
-        <SequenceRootPicker graph={graph} currentTitle={scene.rootTitle} onPick={onDrillToSequence} depth={seqDepth} onDepth={setSeqDepth} count={scene.messages.length} />
+        <SequenceRootPicker graph={graph} currentTitle={scene.rootTitle} onPick={onDrillToSequence} depth={seqDepth} onDepth={setSeqDepth} count={scene.callCount} truncated={scene.truncated} />
       )}
       {scene.kind === "structure" && <StructureLegend present={new Set(scene.regions.map((r) => r.title))} />}
       <DetailPanel box={detail.box} crate={detail.crate} onClose={() => setSelectedId(null)} onOpenSource={onOpenSource} />
@@ -101,8 +101,8 @@ function shortId(id: string): string {
   return id.split("::").slice(-2).join("::");
 }
 
-function SequenceRootPicker(props: { graph: Graph; currentTitle: string; onPick: (id: string) => void; depth: number; onDepth: (d: number) => void; count: number }): JSX.Element {
-  const { graph, currentTitle, onPick, depth, onDepth, count } = props;
+function SequenceRootPicker(props: { graph: Graph; currentTitle: string; onPick: (id: string) => void; depth: number; onDepth: (d: number) => void; count: number; truncated: boolean }): JSX.Element {
+  const { graph, currentTitle, onPick, depth, onDepth, count, truncated } = props;
   const [q, setQ] = useState("");
   const fns = useMemo(() => graph.nodes.filter((n) => n.kind === "fn"), [graph]);
   const entries = useMemo(() => new Set(graph.entrypoints), [graph]);
@@ -125,7 +125,7 @@ function SequenceRootPicker(props: { graph: Graph; currentTitle: string; onPick:
         <button onClick={() => onDepth(Math.max(1, depth - 1))}>−</button>
         <b>{depth}</b>
         <button onClick={() => onDepth(Math.min(8, depth + 1))}>＋</button>
-        <span className="seqroot-count">{count} msgs</span>
+        <span className="seqroot-count">{count} calls{truncated ? "+ (capped)" : ""}</span>
       </div>
       <input className="seqroot-search" placeholder="trace from… (function)" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="seqroot-list">

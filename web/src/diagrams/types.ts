@@ -115,9 +115,15 @@ export interface Lifeline {
   crate: string;
   /** Column index (0-based, left to right in first-call order). */
   col: number;
+  /** Source location of the function, so clicking the header opens its snippet. */
+  file: string;
+  start: number;
+  end: number;
 }
 
 export interface SeqMessage {
+  /** `call` = solid request arrow; `return` = dashed reply arrow back to the caller. */
+  kind: "call" | "return";
   fromId: string;
   toId: string;
   /** Global vertical order (row index). */
@@ -131,12 +137,31 @@ export interface SeqMessage {
   selfCall: boolean;
 }
 
+/** An activation bar: the span on a participant's lifeline while it is executing
+ *  a call (from the call row down to its return row). The hallmark of a UML
+ *  sequence diagram. */
+export interface Activation {
+  /** Lifeline (participant) id the bar sits on. */
+  id: string;
+  /** Lifeline column index. */
+  col: number;
+  startRow: number;
+  endRow: number;
+  /** Nesting depth — staggers overlapping bars on the same lifeline. */
+  depth: number;
+}
+
 export interface SequenceScene {
   kind: "sequence";
   rootId: string | null;
   rootTitle: string;
   lifelines: Lifeline[];
   messages: SeqMessage[];
+  activations: Activation[];
+  /** Number of `call` messages (returns excluded) — for the picker's count. */
+  callCount: number;
+  /** True when expansion hit the message cap and was cut short. */
+  truncated: boolean;
   crateNames: string[];
 }
 
