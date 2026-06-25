@@ -55,6 +55,14 @@ styles** so you can see the structure flat, with depth, or fully in 3D:
 Click an operation in Structure to jump to its call sequence; click a message to read the
 call-site source; click a lifeline to re-root the sequence on that function.
 
+### Test — run the suite and see results
+
+The **Test** tab runs the project's tests (`cargo test`) and shows a dashboard: a pass /
+fail / ignored summary, then results grouped by **kind** — unit (`#[cfg(test)] mod tests`),
+integration / E2E (`tests/`), and doc-tests — classified by location. Each suite shows its
+counts + time; failed tests expand to their panic message. This is the one place RustViz
+executes your project's code (the analyzer itself never runs anything).
+
 ## How it works
 
 Three loosely-coupled layers joined by one JSON contract (see

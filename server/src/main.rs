@@ -1,5 +1,7 @@
 //! rustviz: analyze a Rust project and serve a 3D visualization on localhost.
 
+mod tests;
+
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -70,6 +72,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/api/analyze", post(analyze_handler))
         .route("/api/source", get(source_handler))
+        .route("/api/tests", post(tests_handler))
         .fallback(static_handler)
         .with_state(state);
 
@@ -106,6 +109,16 @@ async fn analyze_handler(State(st): State<AppState>, body: Option<Json<AnalyzeRe
         }
         Err(err) => (StatusCode::BAD_REQUEST, format!("analyze failed: {err}")).into_response(),
     }
+}
+
+/// Run the project's tests and return the parsed results. Runs in the canonical
+/// workspace root; always returns 200 (errors are carried in the body's `ok`).
+async fn tests_handler(State(st): State<AppState>) -> Response {
+    let root = match st.root.lock() {
+        Ok(g) => g.clone(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "state error").into_response(),
+    };
+    Json(tests::run(&root).await).into_response()
 }
 
 #[derive(Deserialize)]

@@ -1,6 +1,6 @@
 ---
 title: RustViz Architecture
-last_updated: 2026-06-24
+last_updated: 2026-06-25
 tags:
   - rustviz
   - architecture
@@ -45,6 +45,9 @@ A thin `axum` binary:
 - `POST /api/analyze {path?}` → runs the analyzer, returns the `Graph` JSON.
 - `GET /api/source?file&start&end` → returns a source line range. **Path traversal is
   blocked** by canonicalizing and requiring the result to stay under the workspace root.
+- `POST /api/tests` → runs `cargo test` in the project and returns a parsed `TestRun`
+  (`server/src/tests.rs`). **This is the one place the server executes project code** — the
+  analyzer crate stays deterministic and never runs anything.
 - Everything else → embedded `web/dist` assets via `rust-embed` (SPA fallback to
   `index.html`). The server binds to `127.0.0.1` only.
 
@@ -56,8 +59,9 @@ A thin `axum` binary:
 | `aggregate.ts` | Roll functions up to a crate → top-level-module treemap: sum LOC + raw metric counts per tile, normalize scores across tiles, collect crate dependencies |
 | `lenses.ts` | **Pure** color helpers + the lens weight formulas (ported from `metrics/*.rs`) — the only file to touch when adding a lens |
 | `treemap.tsx` | `d3-hierarchy` treemap layout rendered as SVG: crate regions, module tiles colored by lens, dependency-arrow overlay, click/hover |
-| `diagrams/` | The 立体 UML views. **Scene builders** (`structureScene.ts`, `sequenceScene.ts`) turn the Graph into render-agnostic geometry; three **renderers** (`LayeredRenderer.tsx` flat 2D SVG, `IsometricRenderer.tsx` 2.5D SVG, `ThreeRenderer.tsx` three.js/WebGL — lazy-loaded) consume it via the common `RendererProps` in `types.ts`. `DiagramView.tsx` builds the scene and dispatches on render style |
-| `inspector.tsx`, `controls.tsx`, `App.tsx` | React UI: tile inspector (aggregated metrics, deps, hottest functions), lens switcher, search, the Map/Structure/Sequence + render-style switches |
+| `diagrams/` | Structure + Sequence. **Scene builders** (`structureScene.ts`, `sequenceScene.ts`) turn the Graph into render-agnostic geometry; **Structure** renders in 3D (`ThreeRenderer.tsx`, three.js/WebGL — lazy-loaded — a role-zoned code city), **Sequence** in 2D (`LayeredRenderer.tsx`, flat SVG). `DiagramView.tsx` builds the scene and picks the renderer; `ZoomPanSvg.tsx` adds pan/zoom |
+| `TestView.tsx`, `testRun.ts` | The Test tab: `POST /api/tests` → dashboard grouping results by kind (unit / integration·E2E / doc, by location) → suite → test, with pass/fail/ignored + failure messages |
+| `inspector.tsx`, `controls.tsx`, `App.tsx` | React UI: tile inspector, lens switcher, search, and the four-tab switch (Map / Structure / Sequence / Test) |
 
 The diagram layer reuses the same seam as the lenses: the **scene** (what to show — boxes, lifelines, edges, positions) is computed once, and the **render style** (how to draw it — SVG vs WebGL) is pluggable. Structure and sequence diagrams need richer data than the treemap, so the JSON contract carries per-node UML detail (`visibility`, `signature`, `fields`, `variants`) and `call_steps` (ordered, resolved fn→fn calls).
 

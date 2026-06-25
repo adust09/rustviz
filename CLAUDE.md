@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-RustViz analyzes any Rust project and renders an **architecture-at-a-glance treemap** (crates → modules, tile area = LOC, color = crate for the structural base view or one of three metric lenses) in the browser. It also offers **立体 UML views** — a structure (class) diagram and a sequence diagram — in three switchable render styles (flat 2D, isometric 2.5D, and a real three.js 3D scene). See `README.md` for the user-facing feature tour and `docs/architecture.md` for the full layer breakdown.
+RustViz analyzes any Rust project and renders it in the browser across four tabs: **Map** (an architecture-at-a-glance treemap — crates → modules, tile area = LOC, color = crate or one of three metric lenses), **Structure** (a 3D role-zoned "code city"), **Sequence** (a 2D call-flow scoped by a trace root + depth), and **Test** (a test results dashboard that runs `cargo test`). See `README.md` for the user-facing feature tour and `docs/architecture.md` for the full layer breakdown.
 
 ## Commands
 
@@ -40,9 +40,10 @@ web      (TS/Vite/React)                aggregate to crate/module treemap (d3-hi
 ```
 
 - **analyzer/** — `cargo.rs` (workspace members + internal dep edges) → `parse.rs` (`syn` walk, `mod.rs` resolution) → `visit.rs` (one `syn::visit::Visit` pass collecting **all four lenses' metrics at once**) → `metrics/*.rs` (pure raw-score functions) → `graph.rs` (call resolution, Tarjan SCC cycle detection via `petgraph`, fan-in/out, score normalization 0..1). `analyze()` takes the timestamp as an argument — the analyzer is deterministic and never reads the clock.
-- **server/** — thin axum binary. `/api/source` is path-traversal-guarded by canonicalizing under the workspace root (see `read_source` in `server/src/main.rs`); the server binds `127.0.0.1` only.
-- **web/src/** — `schema.ts` (Zod validation at the network boundary) → `aggregate.ts` (roll functions up to crate→top-level-module tiles, normalize across tiles) → `treemap.tsx` (SVG d3-hierarchy layout + dependency overlay) → `inspector.tsx`/`controls.tsx`/`App.tsx`.
-- **web/src/diagrams/** — the 立体 UML views, structured as **scene builders** (render-agnostic geometry) + **renderers** (pluggable visual styles): `structureScene.ts`/`sequenceScene.ts` build a `StructureScene`/`SequenceScene` from the Graph; `LayeredRenderer.tsx` (flat 2D SVG), `IsometricRenderer.tsx` (2.5D SVG, true isometric for structure + a CSS-tilted flat sequence), and `ThreeRenderer.tsx` (three.js/WebGL, **lazy-loaded** so the main bundle excludes three) each consume a scene via the common `RendererProps` in `types.ts`. `DiagramView.tsx` builds the scene + dispatches on render style.
+- **server/** — thin axum binary. `/api/source` is path-traversal-guarded by canonicalizing under the workspace root (see `read_source` in `server/src/main.rs`); the server binds `127.0.0.1` only. `POST /api/tests` runs the project's tests (`cargo test`) and returns a parsed `TestRun` (`server/src/tests.rs`) — this is the **one place the server executes project code**; the analyzer crate stays deterministic and never runs anything.
+- **web/src/** — `schema.ts` (Zod validation at the network boundary) → `aggregate.ts` (roll functions up to crate→top-level-module tiles, normalize across tiles) → `treemap.tsx` (SVG d3-hierarchy layout + dependency overlay) → `inspector.tsx`/`controls.tsx`/`App.tsx`. Four top-level tabs (`ViewMode`): Map (treemap), Structure, Sequence, Test.
+- **web/src/diagrams/** — Structure + Sequence views. **Scene builders** (`structureScene.ts`/`sequenceScene.ts`) turn the Graph into render-agnostic geometry; **Structure renders in 3D** (`ThreeRenderer.tsx`, three.js/WebGL **lazy-loaded** — a role-zoned "code city"), **Sequence renders in 2D** (`LayeredRenderer.tsx`, flat SVG with a trace-root + depth picker). `DiagramView.tsx` builds the scene + picks the renderer. `ZoomPanSvg.tsx` provides pan/zoom for the SVG views.
+- **web/src/TestView.tsx** + **`testRun.ts`** — the Test tab: `POST /api/tests` → a dashboard grouping results by kind (unit / integration·E2E / doc, classified by location) → suite → test, with pass/fail/ignored + failure messages. Results are cached in `App` so switching tabs doesn't re-run.
 
 ## Critical cross-file invariants
 
@@ -56,5 +57,6 @@ These couplings are not discoverable from a single file — break one and the bu
 ## Conventions
 
 - Edition 2021 Rust workspace (`analyzer`, `server`); release profile uses `lto = "thin"`.
-- Frontend: React 18 + Zod + d3-hierarchy. The treemap and the flat/isometric diagram styles are plain SVG; **only the 3D render style uses three.js/WebGL**, and it is lazy-loaded (`web/src/diagrams/ThreeRenderer.tsx`) so it stays out of the main bundle.
+- Frontend: React 18 + Zod + d3-hierarchy. Map and Sequence are plain SVG; **Structure uses three.js/WebGL**, lazy-loaded (`web/src/diagrams/ThreeRenderer.tsx`) so it stays out of the main bundle.
+- **Execution boundary**: the analyzer is pure static analysis (deterministic, never runs anything). The server is also non-executing **except** `POST /api/tests`, which runs `cargo test` in the project for the Test tab. There are now two dual-maintained JSON contracts: `analyzer/src/model.rs ⇔ web/src/schema.ts` (the Graph) and `server/src/tests.rs ⇔ web/src/testRun.ts` (the `TestRun`).
 - Cycle/crate edges are a name-based syntactic approximation (`syn` is a parser, not a name resolver); only workspace-defined functions enter the call-resolution index, so external calls never create spurious edges.

@@ -787,6 +787,196 @@ body,
   color: #eef2f8;
 }
 
+/* --- Test dashboard --- */
+.test-wrap {
+  position: absolute;
+  top: 48px;
+  left: 14px;
+  right: 14px;
+  bottom: 104px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0b0f17;
+  overflow: hidden;
+}
+.test-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.test-run {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #243049;
+  color: #eef2f8;
+  font: 600 12px ui-sans-serif, system-ui, sans-serif;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+.test-run:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.test-badge {
+  font: 700 11px ui-sans-serif, system-ui, sans-serif;
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.test-badge.ok {
+  background: #173a2a;
+  color: #57d98a;
+}
+.test-badge.bad {
+  background: #3a1720;
+  color: #ff6b81;
+}
+.test-chip {
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #aeb9c9;
+  background: #131a26;
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.test-chip.pass {
+  color: #57d98a;
+}
+.test-chip.fail {
+  color: #ff6b81;
+}
+.test-chip.ign {
+  color: #8595ab;
+}
+.test-filter {
+  margin-left: auto;
+  font: 11px ui-sans-serif, system-ui, sans-serif;
+  color: #aeb9c9;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.test-body {
+  flex: 1;
+  overflow: auto;
+  padding: 10px 14px;
+}
+.test-msg {
+  color: var(--muted);
+  font: 12px ui-monospace, Menlo, monospace;
+  padding: 18px 4px;
+}
+.test-msg code {
+  color: #d6deea;
+}
+.test-error {
+  color: #ff8b9b;
+  font: 12px ui-monospace, Menlo, monospace;
+  padding: 10px;
+}
+.test-error pre {
+  margin-top: 8px;
+  background: #0d1119;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  color: #d6c2c6;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.test-kind {
+  margin-bottom: 16px;
+}
+.test-kind-h {
+  font: 700 12px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #c7d0dd;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.test-kind-sub {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #6b7891;
+  margin-left: 6px;
+}
+.test-suite {
+  margin: 6px 0 10px;
+}
+.test-suite-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #8595ab;
+  padding: 2px 0;
+}
+.test-suite-name {
+  color: #d6deea;
+}
+.test-suite-crate {
+  color: #6b7891;
+}
+.test-suite-counts {
+  margin-left: auto;
+}
+.test-suite-counts b.fail {
+  color: #ff6b81;
+}
+.test-case {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0 2px 14px;
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #c6d0dd;
+}
+.test-case.clickable {
+  cursor: pointer;
+}
+.test-case.clickable:hover {
+  color: #eef2f8;
+}
+.test-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.test-dot.passed {
+  background: #57d98a;
+}
+.test-dot.failed {
+  background: #ff6b81;
+}
+.test-dot.ignored {
+  background: #6b7891;
+}
+.test-case.failed .test-case-name {
+  color: #ff8b9b;
+}
+.test-case-x {
+  color: #6b7891;
+}
+.test-case-msg {
+  margin: 2px 0 6px 22px;
+  background: #0d1119;
+  border: 1px solid var(--border);
+  border-left: 2px solid #ff6b81;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font: 10.5px ui-monospace, Menlo, monospace;
+  color: #d6c2c6;
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
 /* --- three.js 3D --- */
 .three-mount {
   position: absolute;

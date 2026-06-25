@@ -20,6 +20,7 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: "map", label: "Map" },
   { id: "structure", label: "Structure" },
   { id: "sequence", label: "Sequence" },
+  { id: "test", label: "Test" },
 ];
 
 const LENS_HINT: Record<Lens, string> = {

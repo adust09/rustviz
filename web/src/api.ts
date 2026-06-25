@@ -1,6 +1,16 @@
 import { Graph } from "./schema";
+import { TestRun } from "./testRun";
 
 // Thin, validated client for the rustviz server endpoints.
+
+/** Run the project's tests on the server (cargo test). Can take a while. */
+export async function runTests(): Promise<TestRun> {
+  const res = await fetch("/api/tests", { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`tests failed: ${res.status} ${await res.text()}`);
+  }
+  return TestRun.parse(await res.json());
+}
 
 export async function fetchGraph(path?: string): Promise<Graph> {
   const res = await fetch("/api/analyze", {

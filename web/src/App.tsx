@@ -4,8 +4,11 @@ import { Controls } from "./controls";
 import { Inspector } from "./inspector";
 import { Treemap } from "./treemap";
 import { DiagramView } from "./diagrams/DiagramView";
+import { TestView } from "./TestView";
 import { aggregate, type Tile } from "./aggregate";
 import { LENSES, type Graph, type Lens } from "./schema";
+import { runTests } from "./api";
+import type { TestRun } from "./testRun";
 import type { ViewMode } from "./diagrams/types";
 
 const EMPTY_DEPS = new Map();
@@ -23,11 +26,30 @@ export function App(): JSX.Element {
   // focusNodeId carries a drill into the sequence's root.
   const [viewMode, setViewMode] = useState<ViewMode>("map");
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+  // Test results are cached so switching tabs doesn't re-run the (slow) suite.
+  const [testRun, setTestRun] = useState<TestRun | null>(null);
+  const [testLoading, setTestLoading] = useState<boolean>(false);
+  const [testError, setTestError] = useState<string | null>(null);
 
   const drillToSequence = (id: string): void => {
     setFocusNodeId(id);
     setViewMode("sequence");
   };
+
+  const onRunTests = (): void => {
+    setTestLoading(true);
+    setTestError(null);
+    runTests()
+      .then(setTestRun)
+      .catch((e: unknown) => setTestError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setTestLoading(false));
+  };
+
+  // Auto-run once on first opening the Test tab.
+  useEffect(() => {
+    if (viewMode === "test" && !testRun && !testLoading && !testError) onRunTests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode]);
 
   const toggleLens = (l: Lens): void =>
     setActive((prev) => {
@@ -76,7 +98,7 @@ export function App(): JSX.Element {
         />
       )}
 
-      {graph && viewMode !== "map" && (
+      {graph && (viewMode === "structure" || viewMode === "sequence") && (
         <DiagramView
           graph={graph}
           diagramType={viewMode}
@@ -84,6 +106,8 @@ export function App(): JSX.Element {
           onDrillToSequence={drillToSequence}
         />
       )}
+
+      {viewMode === "test" && <TestView run={testRun} loading={testLoading} error={testError} onRun={onRunTests} />}
 
       <Controls
         meta={graph?.meta ?? null}
