@@ -18,8 +18,8 @@ interface ControlsProps {
 
 const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: "map", label: "Map" },
-  { id: "structure", label: "Structure · 3D" },
-  { id: "sequence", label: "Sequence · 2D" },
+  { id: "structure", label: "Structure" },
+  { id: "sequence", label: "Sequence" },
 ];
 
 const LENS_HINT: Record<Lens, string> = {
@@ -103,7 +103,7 @@ export function Controls(props: ControlsProps): JSX.Element {
         )}
         {meta && !isMap && (
           <div className="meta">
-            {viewMode} · {viewMode === "structure" ? "3D" : "2D"} · {meta.crate_count} crates · {meta.total_loc} LOC
+            {viewMode} · {meta.crate_count} crates · {meta.total_loc} LOC
           </div>
         )}
         {hasLens && isMap && (

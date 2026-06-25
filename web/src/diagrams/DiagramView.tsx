@@ -63,7 +63,7 @@ export function DiagramView({ graph, diagramType, focusNodeId, onDrillToSequence
   // Structure renders in 3D; sequence renders in 2D (flat SVG).
   const body =
     diagramType === "structure" ? (
-      <Suspense fallback={<div className="diagram-placeholder"><p>loading 3D…</p></div>}>
+      <Suspense fallback={<div className="diagram-placeholder"><p>loading…</p></div>}>
         <ThreeRenderer {...common} />
       </Suspense>
     ) : (
