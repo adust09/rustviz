@@ -48,6 +48,7 @@ pub fn assemble(collected: Collected, ws: &Workspace, root_path: &str, analyzed_
         cycles,
         call_steps,
         tables,
+        dep_graph: ws.dep_graph.clone(),
     }
 }
 

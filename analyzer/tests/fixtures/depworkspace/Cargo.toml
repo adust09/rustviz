@@ -1,0 +1,6 @@
+[workspace]
+members = ["app", "core", "testutil"]
+# `leaf` is referenced by path from `core` but excluded from the workspace, so it
+# appears in the resolved graph as a (path) dependency with workspace = false.
+exclude = ["leaf"]
+resolver = "2"

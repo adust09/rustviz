@@ -10,6 +10,10 @@ fn storage_fixture_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/storage")
 }
 
+fn dep_fixture_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/depworkspace")
+}
+
 #[test]
 fn analyzes_fixture_with_known_metric_counts() {
     let graph = rustviz_analyzer::analyze(&fixture_dir(), "1970-01-01T00:00:00Z")
@@ -100,4 +104,36 @@ fn detects_storage_tables_from_doc_specs() {
         !graph.tables.iter().any(|t| t.enum_name == "Direction"),
         "ordinary enums with <2 spec variants are not storage tables"
     );
+}
+
+#[test]
+fn builds_dependency_graph() {
+    let graph = rustviz_analyzer::analyze(&dep_fixture_dir(), "1970-01-01T00:00:00Z")
+        .expect("analysis should succeed on the depworkspace fixture");
+
+    let dg = &graph.dep_graph;
+    let by_id: std::collections::HashMap<&str, &_> = dg.crates.iter().map(|c| (c.id.as_str(), c)).collect();
+    let crate_named = |name: &str| dg.crates.iter().find(|c| c.name == name);
+
+    // Workspace members vs the non-member path crate.
+    for m in ["app", "core", "testutil"] {
+        assert!(crate_named(m).is_some_and(|c| c.workspace), "{m} is a workspace member");
+    }
+    assert!(crate_named("leaf").is_some_and(|c| !c.workspace), "leaf is NOT a workspace member");
+
+    // Resolve edges by id → (from_name, to_name, kind) for readable assertions.
+    let named_edges: std::collections::HashSet<(String, String, rustviz_analyzer::model::DepKind)> = dg
+        .edges
+        .iter()
+        .filter_map(|e| {
+            let from = by_id.get(e.from.as_str())?;
+            let to = by_id.get(e.to.as_str())?;
+            Some((from.name.clone(), to.name.clone(), e.kind))
+        })
+        .collect();
+
+    use rustviz_analyzer::model::DepKind;
+    assert!(named_edges.contains(&("app".into(), "core".into(), DepKind::Normal)), "app -> core (normal)");
+    assert!(named_edges.contains(&("app".into(), "testutil".into(), DepKind::Dev)), "app -> testutil (dev)");
+    assert!(named_edges.contains(&("core".into(), "leaf".into(), DepKind::Normal)), "core -> leaf (transitive)");
 }

@@ -642,6 +642,122 @@ body,
   color: #ffd23f;
 }
 
+/* Deps (crate dependency graph) diagram. */
+.dep-name {
+  font: 600 11px ui-monospace, Menlo, monospace;
+  fill: #dbe3ee;
+  pointer-events: none;
+}
+.dep-ver {
+  font: 9px ui-monospace, Menlo, monospace;
+  fill: #6b7891;
+  pointer-events: none;
+}
+.dep-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 220px;
+  background: #0d1119ee;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  z-index: 4;
+  padding: 9px 12px 11px;
+}
+.dep-panel-h {
+  color: #c7d0dd;
+  font: 700 11px ui-sans-serif, system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.dep-counts {
+  font: 10.5px ui-monospace, Menlo, monospace;
+  color: #9fb0c6;
+  margin-bottom: 8px;
+}
+.dep-hidden {
+  color: #6b7891;
+}
+.dep-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.dep-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #8294ad;
+  cursor: pointer;
+}
+.dep-kind.active {
+  color: #dbe3ee;
+}
+.dep-swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.dep-depth {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 11px ui-monospace, Menlo, monospace;
+  color: #9fb0c6;
+  margin-bottom: 8px;
+}
+.dep-depth button {
+  width: 22px;
+  height: 22px;
+  background: #1a2230;
+  color: #d6deea;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.dep-depth button:hover {
+  background: #243049;
+}
+.dep-search {
+  width: 100%;
+  box-sizing: border-box;
+  background: #0b0f17;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #dbe3ee;
+  font: 11px ui-monospace, Menlo, monospace;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+}
+.dep-legend-key {
+  display: flex;
+  align-items: center;
+  font: 10px ui-monospace, Menlo, monospace;
+  color: #8ea0b8;
+  border-top: 1px solid var(--border);
+  padding-top: 7px;
+}
+.dep-ws-dot,
+.dep-ext-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+}
+.dep-ws-dot {
+  background: #4aa3df;
+}
+.dep-ext-dot {
+  background: transparent;
+  border: 1px solid #3a4556;
+}
+
 /* Detail panel — inspect a focused building (type) or district (crate). */
 .detail {
   position: absolute;

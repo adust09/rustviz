@@ -66,6 +66,24 @@ export const TableDef = z.object({
 });
 export type TableDef = z.infer<typeof TableDef>;
 
+// Resolved crate dependency graph (mirrors model.rs DepGraph) — drives the Deps tab.
+export const DepKind = z.enum(["normal", "dev", "build"]);
+export type DepKind = z.infer<typeof DepKind>;
+
+export const DepCrate = z.object({
+  id: z.string(),
+  name: z.string(),
+  version: z.string(),
+  workspace: z.boolean(),
+});
+export type DepCrate = z.infer<typeof DepCrate>;
+
+export const DepEdge = z.object({ from: z.string(), to: z.string(), kind: DepKind });
+export type DepEdge = z.infer<typeof DepEdge>;
+
+export const DepGraph = z.object({ crates: z.array(DepCrate), edges: z.array(DepEdge) });
+export type DepGraph = z.infer<typeof DepGraph>;
+
 const SecurityMetrics = z.object({
   unsafe_blocks: z.number(),
   unwraps: z.number(),
@@ -150,6 +168,7 @@ export const Graph = z.object({
   cycles: z.array(z.array(z.string())),
   call_steps: z.array(CallStep),
   tables: z.array(TableDef),
+  dep_graph: DepGraph,
 });
 export type Graph = z.infer<typeof Graph>;
 

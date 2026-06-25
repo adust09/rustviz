@@ -24,6 +24,10 @@ pub struct Graph {
     /// documented as `<desc>: <Key> -> <Value>`). Drives the ER diagram. See
     /// [`TableDef`]. A parallel array like `call_steps` — not a `NodeKind`.
     pub tables: Vec<TableDef>,
+    /// Full resolved crate dependency graph (workspace + external/transitive),
+    /// from `cargo metadata`. Drives the Deps tab. Kept separate from
+    /// `nodes`/`edges` so the treemap/structure paths see workspace crates only.
+    pub dep_graph: DepGraph,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +206,40 @@ pub struct FieldDef {
 pub struct VariantDef {
     pub name: String,
     pub payload: Vec<String>,
+}
+
+/// The resolved crate dependency graph (workspace + external/transitive crates).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct DepGraph {
+    pub crates: Vec<DepCrate>,
+    pub edges: Vec<DepEdge>,
+}
+
+/// One crate in the dependency graph, keyed by its cargo `PackageId` repr.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepCrate {
+    /// Stable id (cargo `PackageId` repr) — unique even across duplicate versions.
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    /// True for workspace members; false for external/transitive crates.
+    pub workspace: bool,
+}
+
+/// A `from -> to` dependency edge (ids are `DepCrate.id`), tagged with its kind.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepEdge {
+    pub from: String,
+    pub to: String,
+    pub kind: DepKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DepKind {
+    Normal,
+    Dev,
+    Build,
 }
 
 /// A storage-table enum: one persistence store whose variants are column

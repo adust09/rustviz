@@ -5,7 +5,7 @@ import type { FieldDef, FnSignature, NodeKind, VariantDef, Visibility } from "..
 // renderers (flat / iso / 3d) consume the same scene. Keeps diagram semantics
 // in one place and the visual style pluggable — same seam as treemap vs lenses.
 
-export type ViewMode = "map" | "structure" | "sequence" | "test" | "er";
+export type ViewMode = "map" | "structure" | "sequence" | "test" | "er" | "deps";
 
 // Normalized virtual space: every scene lays out inside [0,SCENE_W] x [0,SCENE_H];
 // renderers scale it into their own viewport. `layer` doubles as the z depth.
@@ -221,6 +221,40 @@ export interface ERScene {
   /** Detected store enums (one per `TableDef`). */
   stores: { name: string; count: number }[];
   crateNames: string[];
+  worldW: number;
+  worldH: number;
+}
+
+// --- Deps (crate dependency graph) ---
+// A layered DAG of crates (workspace + external/transitive); layer = shortest hop
+// from a workspace crate. Self-contained view (see DepsView.tsx), not in the
+// DiagramScene union.
+
+export interface DepNode {
+  id: string;
+  name: string;
+  version: string;
+  workspace: boolean;
+  /** Shortest dependency distance from a workspace crate (workspace = 0). */
+  layer: number;
+  x: number;
+  y: number;
+  inCount: number;
+  outCount: number;
+}
+
+export interface DepLink {
+  from: string;
+  to: string;
+  kind: "normal" | "dev" | "build";
+}
+
+export interface DepsScene {
+  kind: "deps";
+  nodes: DepNode[];
+  links: DepLink[];
+  layerCount: number;
+  counts: { crates: number; external: number; edges: number; hidden: number };
   worldW: number;
   worldH: number;
 }

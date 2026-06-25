@@ -21,6 +21,7 @@ const VIEW_MODES: { id: ViewMode; label: string }[] = [
   { id: "structure", label: "Structure" },
   { id: "sequence", label: "Sequence" },
   { id: "er", label: "ER" },
+  { id: "deps", label: "Deps" },
   { id: "test", label: "Test" },
 ];
 

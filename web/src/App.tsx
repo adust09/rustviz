@@ -5,6 +5,7 @@ import { Inspector } from "./inspector";
 import { Treemap } from "./treemap";
 import { DiagramView } from "./diagrams/DiagramView";
 import { ERView } from "./diagrams/ERView";
+import { DepsView } from "./diagrams/DepsView";
 import { TestView } from "./TestView";
 import { aggregate, type Tile } from "./aggregate";
 import { LENSES, type Graph, type Lens } from "./schema";
@@ -142,6 +143,8 @@ export function App(): JSX.Element {
       )}
 
       {graph && viewMode === "er" && <ERView graph={graph} />}
+
+      {graph && viewMode === "deps" && <DepsView graph={graph} />}
 
       {viewMode === "test" && (
         <TestView
