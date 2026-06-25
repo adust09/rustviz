@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Graph } from "./schema";
 import type { Suite, TestCase, TestRun } from "./testRun";
+import type { CoverageReport, FileCoverage } from "./coverage";
 
 interface TestViewProps {
   run: TestRun | null;
@@ -9,6 +10,10 @@ interface TestViewProps {
   onRun: () => void;
   /** Graph supplies each test fn's doc comment (the "intent"). */
   graph: Graph | null;
+  coverage: CoverageReport | null;
+  covLoading: boolean;
+  covError: string | null;
+  onRunCoverage: () => void;
 }
 
 interface Row {
@@ -26,7 +31,8 @@ function humanize(name: string): string {
 
 const KIND_LABEL: Record<Suite["kind"], string> = { unit: "unit", integration: "e2e", doc: "doc" };
 
-export function TestView({ run, loading, error, onRun, graph }: TestViewProps): JSX.Element {
+export function TestView(props: TestViewProps): JSX.Element {
+  const { run, loading, error, onRun, graph, coverage, covLoading, covError, onRunCoverage } = props;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [failsOnly, setFailsOnly] = useState(false);
 
@@ -85,6 +91,8 @@ export function TestView({ run, loading, error, onRun, graph }: TestViewProps): 
       </div>
 
       <div className="test-body">
+        <CoveragePanel report={coverage} loading={covLoading} error={covError} onRun={onRunCoverage} />
+
         {loading && <div className="test-msg">running <code>cargo test</code> on the project… this can take a while (it compiles first).</div>}
         {!loading && error && <div className="test-error">⚠ {error}</div>}
         {!loading && !error && run?.error && (
@@ -117,6 +125,148 @@ export function TestView({ run, loading, error, onRun, graph }: TestViewProps): 
         )}
       </div>
     </div>
+  );
+}
+
+/** <50% red, <80% amber, else green — the visual "where's the risk" cue. */
+function tier(pct: number): "low" | "mid" | "high" {
+  if (pct < 50) return "low";
+  if (pct < 80) return "mid";
+  return "high";
+}
+
+interface CrateCov {
+  crate: string;
+  prefix: string;
+  covered: number;
+  total: number;
+  pct: number;
+  files: FileCoverage[];
+}
+
+/** Roll per-file coverage up to per-crate, keyed by the path before `/src/`. */
+function byCrate(files: FileCoverage[]): CrateCov[] {
+  const groups = new Map<string, FileCoverage[]>();
+  for (const f of files) {
+    const i = f.file.indexOf("/src/");
+    const prefix = i >= 0 ? f.file.slice(0, i) : f.file.split("/").slice(0, -1).join("/");
+    const arr = groups.get(prefix) ?? [];
+    arr.push(f);
+    groups.set(prefix, arr);
+  }
+  const out: CrateCov[] = [];
+  for (const [prefix, fs] of groups) {
+    const covered = fs.reduce((s, f) => s + f.covered, 0);
+    const total = fs.reduce((s, f) => s + f.total, 0);
+    out.push({
+      crate: prefix.split("/").pop() || prefix || "(root)",
+      prefix,
+      covered,
+      total,
+      pct: total ? (covered / total) * 100 : 0,
+      files: fs,
+    });
+  }
+  return out.sort((a, b) => a.pct - b.pct);
+}
+
+function Bar({ pct }: { pct: number }): JSX.Element {
+  return (
+    <span className={`cov-bar ${tier(pct)}`}>
+      <span className="cov-bar-fill" style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+    </span>
+  );
+}
+
+function CoveragePanel(props: {
+  report: CoverageReport | null;
+  loading: boolean;
+  error: string | null;
+  onRun: () => void;
+}): JSX.Element {
+  const { report, loading, error, onRun } = props;
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const crates = useMemo(() => (report?.ok ? byCrate(report.files) : []), [report]);
+
+  const toggle = (k: string): void =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      return next;
+    });
+
+  return (
+    <div className="cov-panel">
+      <div className="cov-head">
+        <span className="cov-title">coverage</span>
+        <button className="cov-run" onClick={onRun} disabled={loading}>
+          {loading ? "measuring…" : report ? "↻ re-measure" : "▶ measure coverage"}
+        </button>
+        {report?.ok && !loading && (
+          <>
+            <span className={`cov-overall ${tier(report.pct)}`}>{report.pct.toFixed(1)}%</span>
+            <span className="cov-lines">
+              {report.covered.toLocaleString()} / {report.total.toLocaleString()} lines
+            </span>
+            <span className="cov-overall-bar">
+              <Bar pct={report.pct} />
+            </span>
+          </>
+        )}
+      </div>
+
+      {loading && (
+        <div className="test-msg">
+          running <code>cargo llvm-cov</code>… this instruments and rebuilds the project, so it is slower than a plain test run.
+        </div>
+      )}
+      {!loading && error && <div className="test-error">⚠ {error}</div>}
+      {!loading && !error && report && !report.ok && (
+        <div className="test-error">
+          <div>⚠ coverage could not run</div>
+          <pre>{report.error}</pre>
+        </div>
+      )}
+      {!loading && !error && report?.ok && crates.length === 0 && <div className="test-msg">no coverage data.</div>}
+      {!loading && !error && report?.ok && crates.length > 0 && (
+        <table className="cov-table">
+          <tbody>
+            {crates.map((c) => {
+              const isOpen = open.has(c.prefix);
+              return (
+                <CrateRow key={c.prefix} crate={c} open={isOpen} onToggle={() => toggle(c.prefix)} />
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function CrateRow(props: { crate: CrateCov; open: boolean; onToggle: () => void }): JSX.Element {
+  const { crate, open, onToggle } = props;
+  return (
+    <>
+      <tr className="cov-crate-row" onClick={onToggle}>
+        <td className="cov-c-name" title={crate.prefix}>
+          <span className="cov-x">{open ? "▾" : "▸"}</span> {crate.crate}
+        </td>
+        <td className="cov-c-bar"><Bar pct={crate.pct} /></td>
+        <td className={`cov-c-pct ${tier(crate.pct)}`}>{crate.pct.toFixed(1)}%</td>
+        <td className="cov-c-lines">{crate.covered} / {crate.total}</td>
+      </tr>
+      {open &&
+        crate.files.map((f) => (
+          <tr key={f.file} className="cov-file-row">
+            <td className="cov-f-name" title={f.file}>{f.file.split("/").pop()}</td>
+            <td className="cov-f-bar"><Bar pct={f.pct} /></td>
+            <td className={`cov-f-pct ${tier(f.pct)}`}>{f.pct.toFixed(1)}%</td>
+            <td className="cov-f-lines">{f.covered} / {f.total}</td>
+          </tr>
+        ))}
+    </>
   );
 }
 

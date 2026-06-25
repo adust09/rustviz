@@ -1,5 +1,6 @@
 import { Graph } from "./schema";
 import { TestRun } from "./testRun";
+import { CoverageReport } from "./coverage";
 
 // Thin, validated client for the rustviz server endpoints.
 
@@ -20,6 +21,25 @@ export async function getCachedTests(): Promise<TestRun | null> {
   }
   const json = await res.json();
   return json === null ? null : TestRun.parse(json);
+}
+
+/** Run `cargo llvm-cov` on the server. Builds with instrumentation — slow. */
+export async function runCoverage(): Promise<CoverageReport> {
+  const res = await fetch("/api/coverage", { method: "POST" });
+  if (!res.ok) {
+    throw new Error(`coverage failed: ${res.status} ${await res.text()}`);
+  }
+  return CoverageReport.parse(await res.json());
+}
+
+/** Get the last cached coverage report (null if none run yet). */
+export async function getCachedCoverage(): Promise<CoverageReport | null> {
+  const res = await fetch("/api/coverage");
+  if (!res.ok) {
+    throw new Error(`coverage cache failed: ${res.status}`);
+  }
+  const json = await res.json();
+  return json === null ? null : CoverageReport.parse(json);
 }
 
 export async function fetchGraph(path?: string): Promise<Graph> {

@@ -1,5 +1,6 @@
 //! rustviz: analyze a Rust project and serve a 3D visualization on localhost.
 
+mod coverage;
 mod tests;
 
 use std::net::SocketAddr;
@@ -44,6 +45,8 @@ struct AppState {
     root: Arc<Mutex<PathBuf>>,
     /// Last test run, so a reload shows the previous results without re-running.
     last_tests: Arc<Mutex<Option<tests::TestRun>>>,
+    /// Last coverage report, cached the same way.
+    last_coverage: Arc<Mutex<Option<coverage::CoverageReport>>>,
 }
 
 #[tokio::main]
@@ -70,12 +73,14 @@ async fn main() -> Result<()> {
         default_path: cli.project.clone(),
         root: Arc::new(Mutex::new(root)),
         last_tests: Arc::new(Mutex::new(None)),
+        last_coverage: Arc::new(Mutex::new(None)),
     };
 
     let app = Router::new()
         .route("/api/analyze", post(analyze_handler))
         .route("/api/source", get(source_handler))
         .route("/api/tests", post(tests_run_handler).get(tests_get_handler))
+        .route("/api/coverage", post(coverage_run_handler).get(coverage_get_handler))
         .fallback(static_handler)
         .with_state(state);
 
@@ -132,6 +137,25 @@ async fn tests_run_handler(State(st): State<AppState>) -> Response {
 /// browser reload shows the previous results instead of re-running.
 async fn tests_get_handler(State(st): State<AppState>) -> Response {
     let cached = st.last_tests.lock().ok().and_then(|g| g.clone());
+    Json(cached).into_response()
+}
+
+/// Run `cargo llvm-cov`, cache, and return the coverage report.
+async fn coverage_run_handler(State(st): State<AppState>) -> Response {
+    let root = match st.root.lock() {
+        Ok(g) => g.clone(),
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "state error").into_response(),
+    };
+    let report = coverage::run(&root).await;
+    if let Ok(mut g) = st.last_coverage.lock() {
+        *g = Some(report.clone());
+    }
+    Json(report).into_response()
+}
+
+/// Return the last cached coverage report (or `null`).
+async fn coverage_get_handler(State(st): State<AppState>) -> Response {
+    let cached = st.last_coverage.lock().ok().and_then(|g| g.clone());
     Json(cached).into_response()
 }
 

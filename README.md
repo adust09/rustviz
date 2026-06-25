@@ -55,13 +55,25 @@ styles** so you can see the structure flat, with depth, or fully in 3D:
 Click an operation in Structure to jump to its call sequence; click a message to read the
 call-site source; click a lifeline to re-root the sequence on that function.
 
-### Test — run the suite and see results
+### Test — run the suite, read its intent, and see coverage
 
 The **Test** tab runs the project's tests (`cargo test`) and shows a dashboard: a pass /
-fail / ignored summary, then results grouped by **kind** — unit (`#[cfg(test)] mod tests`),
-integration / E2E (`tests/`), and doc-tests — classified by location. Each suite shows its
-counts + time; failed tests expand to their panic message. This is the one place RustViz
-executes your project's code (the analyzer itself never runs anything).
+fail / ignored summary, then a table of every test with its **kind** — unit
+(`#[cfg(test)] mod tests`), integration / E2E (`tests/`), and doc-tests, classified by
+location — and an **intent** column that reads the test fn's doc comment to say *what it
+verifies* (falling back to a humanized name when undocumented). Failed tests expand to
+their panic message.
+
+Click **measure coverage** to run `cargo llvm-cov`: the panel shows the overall line
+coverage and a per-crate breakdown (expandable to per-file), colored red / amber / green
+so the under-tested code stands out at a glance. Coverage instruments and rebuilds, so it
+runs only on demand — never automatically. It needs
+[`cargo-llvm-cov`](https://github.com/taiki-e/cargo-llvm-cov)
+(`cargo install cargo-llvm-cov && rustup component add llvm-tools-preview`); without it the
+panel shows an install hint.
+
+Running tests and coverage is the one place RustViz executes your project's code (the
+analyzer itself never runs anything).
 
 ## How it works
 
